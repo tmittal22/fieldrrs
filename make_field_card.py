@@ -83,6 +83,37 @@ def side_view(ax):
                 color=SUN, lw=2, zorder=5)
     ax.text(-3.7, 4.25, "SUN", fontsize=11, weight="bold", color="#b8860b", ha="center")
 
+    # --- SOLAR ELEVATION vs SOLAR ZENITH, as a standalone inset.
+    # The instrument logs "Solar Angle", which is ELEVATION, and the two are trivially
+    # confusable: they sum to 90 and both get called "the solar angle" in speech.
+    # Drawn as its own small schematic in clear space rather than annotated onto the
+    # main scene, where it collided with the panel.
+    ix, iy, R = -2.05, 2.55, 1.05                 # inset origin and radius
+    ax.add_patch(FancyBboxPatch((ix - 0.62, iy - 1.28), 2.90, 2.72,
+                                boxstyle="round,pad=0.06", fc="#fffdf2",
+                                ec="#d0b000", lw=1.2, zorder=2))
+    ax.plot([ix, ix + 1.55], [iy, iy], color="#999", lw=1.1, zorder=3)          # horizon
+    ax.plot([ix, ix], [iy, iy + 1.22], color="#999", lw=1.1, ls=":", zorder=3)  # vertical
+    el = 52.0
+    ex_, ey_ = ix + R * math.cos(math.radians(el)), iy + R * math.sin(math.radians(el))
+    ax.annotate("", xy=(ex_, ey_), xytext=(ix, iy),
+                arrowprops=dict(arrowstyle="-|>", lw=2.0, color=SUN), zorder=4)
+    ax.add_patch(Circle((ex_ + 0.10, ey_ + 0.09), 0.13, fc=SUN, ec="#b8860b",
+                        lw=1.1, zorder=5))
+    ax.add_patch(Arc((ix, iy), 0.86, 0.86, angle=0, theta1=0, theta2=el,
+                     color="#b8860b", lw=1.9, zorder=4))
+    ax.text(ix + 0.52, iy + 0.13, "ELEV", fontsize=7.6, color="#8a6000",
+            weight="bold", zorder=5)
+    ax.add_patch(Arc((ix, iy), 1.55, 1.55, angle=0, theta1=el, theta2=90,
+                     color="#666", lw=1.5, ls="--", zorder=4))
+    ax.text(ix + 0.06, iy + 0.88, "ZENITH", fontsize=7.6, color="#555", zorder=5)
+    ax.text(ix - 0.50, iy - 0.22,
+            "ELEVATION + ZENITH = 90°\n"
+            "The instrument's 'Solar Angle'\n"
+            "is ELEVATION, not zenith.\n"
+            "Use GPS Time, not the clock.",
+            fontsize=7.8, color=INK, ha="left", va="top", zorder=5, linespacing=1.35)
+
     # --- WATER ray: 40 deg from nadir  =  50 deg below horizontal
     ang = math.radians(90 - VIEW_ZENITH)     # below horizontal
     L = 2.9
