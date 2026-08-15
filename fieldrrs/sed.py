@@ -16,6 +16,7 @@ File layout::
 
 from __future__ import annotations
 
+import math
 import os
 import re
 
@@ -146,6 +147,48 @@ class SedSpectrum(object):
         """
         m = re.search(r"FLENS\s*(\d+)", self.header.get("Foreoptic", ""), re.I)
         return float(m.group(1)) if m else None
+
+    def footprint(self, view_zenith_deg=40.0):
+        """What patch of water this scan actually averaged over.
+
+        The instrument logs ``Range`` (a rangefinder distance to the target) and the
+        foreoptic sets the full-angle field of view. Together they give the sampled spot,
+        which is the spatial scale every number from this scan represents. Returns a dict
+        of metres, or None if either input is missing.
+
+        Geometry: at range R and full-angle FOV, the beam diameter perpendicular to the
+        line of sight is ``2 R tan(FOV/2)``. Projected onto a horizontal water surface
+        viewed at ``theta`` from nadir, that circle becomes an ellipse whose along-view
+        axis is stretched by ``1/cos(theta)``. The sensor height above the surface is
+        ``R cos(theta)`` and the spot centre lies ``R sin(theta)`` horizontally away.
+
+        Why it matters:
+
+        * it is the scale you are averaging waves over, so a spot much smaller than the
+          dominant wavelength gives scan-to-scan scatter that is real surface variability,
+          not noise;
+        * it sets how far the footprint is from the platform, which is what decides
+          whether you are looking at your own shadow or wake;
+        * comparing to a satellite pixel (300 m for OLCI, 1 km for MODIS) means comparing
+          a sub-metre spot to something 10^5 to 10^6 times larger in area.
+        """
+        r = self.range_m
+        fov = self.fov_deg
+        if r is None or fov is None:
+            return None
+        th = math.radians(float(view_zenith_deg))
+        across = 2.0 * r * math.tan(math.radians(fov) / 2.0)
+        along = across / math.cos(th) if math.cos(th) > 1e-6 else float("inf")
+        return {
+            "range_m": r,
+            "fov_deg": fov,
+            "view_zenith_deg": float(view_zenith_deg),
+            "spot_across_m": across,
+            "spot_along_m": along,
+            "area_m2": math.pi * (across / 2.0) * (along / 2.0),
+            "height_above_surface_m": r * math.cos(th),
+            "horizontal_offset_m": r * math.sin(th),
+        }
 
     @property
     def gps_time(self):

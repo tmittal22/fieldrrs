@@ -207,7 +207,7 @@ def plan_view(ax):
 def steps(ax):
     ax.axis("off")
     ax.set_xlim(0, 10)
-    ax.set_ylim(0.92, 3.18)      # cropped so the boxes hug their text
+    ax.set_ylim(0.62, 3.18)      # cropped so the boxes hug their text
 
     boxes = [
         ("1.  PANEL", PANEL, "white",
@@ -238,25 +238,33 @@ def steps(ax):
          "DARWin: TARGET scan. Save.\n"
          "Repeat 2 and 3 five times."),
         ("RECORD", "#8a7000", "#fff6d5",
-         "WIND SPEED (m/s) — sets ρ,\n"
-         "  the largest error in the whole\n"
-         "  measurement. ρ = 0.028 is only\n"
+         "WIND SPEED (m/s) — sets ρ, the\n"
+         "  largest error in the whole\n"
+         "  measurement. ρ = 0.028 only\n"
          "  valid below ~5 m/s.\n"
-         "Cloud, or sun obscured?\n"
-         "Time + lat/lon → solar angle\n"
          "Wind DIRECTION + a photo\n"
+         "Cloud, or sun obscured?\n"
          "Water clear or turbid?\n"
          "  turbid → do NOT use nir_zero\n"
-         "Panel reflectance used (0.99?)"),
+         "Panel reflectance used (0.99?)\n\n"
+         "The instrument already logs\n"
+         "Range, Tilt, GPS Time and\n"
+         "Solar Angle (= ELEVATION,\n"
+         "not zenith — verified)."),
         ("CHECK ON THE SPOT", GOOD, "#eaf6ea",
-         "Run the GUI at the station.\n\n"
+         "⚠ THE CLOCK MAY BE WRONG.\n"
+         "  Use GPS Time for solar\n"
+         "  geometry. On a real file the\n"
+         "  clock read 05:56 with the\n"
+         "  sun below the horizon.\n\n"
          "R_rs positive across 400-700?\n"
          "  negative = over-subtracted\n"
          "Peak where the water looks?\n"
-         "  blue = clear, green = turbid\n"
-         "Replicates lie on top of\n"
-         "  each other?\n"
+         "Replicates on top of each other?\n"
          "R_rs(443) order 1e-3 to 1e-2?\n\n"
+         "FOV × range = footprint. An 8°\n"
+         "lens at 3.8 m sees ~0.5 m of\n"
+         "water; the GUI plots it.\n\n"
          "Copy the .sed files off tonight."),
     ]
     n = len(boxes)
@@ -264,7 +272,7 @@ def steps(ax):
     for i, (title, col, fc) in enumerate([(b[0], b[1], b[2]) for b in boxes]):
         body = boxes[i][3]
         x = 0.12 + i * w
-        ax.add_patch(FancyBboxPatch((x, 1.00), w - 0.16, 2.08,
+        ax.add_patch(FancyBboxPatch((x, 0.70), w - 0.16, 2.38,
                                     boxstyle="round,pad=0.05", fc=fc, ec=col, lw=2.4))
         ax.text(x + (w - 0.16) / 2.0, 2.86, title, fontsize=12.5, weight="bold",
                 color=col, ha="center")
@@ -274,7 +282,7 @@ def steps(ax):
 
 def main():
     fig = plt.figure(figsize=(16.5, 11.7))          # A3 landscape
-    gs = fig.add_gridspec(2, 2, height_ratios=[1.55, 0.80], width_ratios=[1.5, 1.0],
+    gs = fig.add_gridspec(2, 2, height_ratios=[1.55, 0.92], width_ratios=[1.5, 1.0],
                           hspace=0.16, wspace=0.10,
                           left=0.03, right=0.985, top=0.905, bottom=0.03)
     side_view(fig.add_subplot(gs[0, 0]))

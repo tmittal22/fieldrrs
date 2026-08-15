@@ -27,7 +27,6 @@ from .solar import (
     ALT_RELATIVE_AZIMUTH,
     DEFAULT_RELATIVE_AZIMUTH,
     DEFAULT_VIEW_ZENITH,
-    compass_point,
     declination_from_sun_sighting,
     local_to_utc_hours,
     pointing,
@@ -54,6 +53,7 @@ class App(tk.Tk):
         self.folder = None
         self.slots = {"water": None, "sky": None, "panel": None}   # single-station mode
         self.last_pointing = None
+        self.last_footprint = None
         self._build()
 
     # ---------------------------------------------------------------- layout
@@ -178,8 +178,15 @@ class App(tk.Tk):
 
         ttk.Label(right, text="Messages  (read these before trusting a number)",
                   font=BIGB).pack(anchor="w", pady=(6, 0))
-        self.log = tk.Text(right, height=13, font=MONO, wrap=tk.WORD, bg="#fffdf3")
+        self.log = tk.Text(right, height=11, font=MONO, wrap=tk.WORD, bg="#fffdf3")
         self.log.pack(fill=tk.BOTH, expand=False)
+
+        ttk.Label(right, text="Footprint  (what patch of water this scan averaged over)",
+                  font=BIGB).pack(anchor="w", pady=(6, 0))
+        self.fp_canvas = tk.Canvas(right, bg="white", height=190,
+                                   highlightthickness=1, highlightbackground="#999")
+        self.fp_canvas.pack(fill=tk.X)
+        self.fp_canvas.bind("<Configure>", lambda e: self.draw_footprint())
         self.say("Ready. Open the folder of .sed scans from today's station.")
         self.say("Reminder: water = 40 deg from nadir, 135 deg from the sun; "
                  "sky = 40 deg from ZENITH at the same bearing; panel level and unshaded.")
@@ -231,6 +238,7 @@ class App(tk.Tk):
                     spec.wavelength[-1]),
             fg="#060")
         self.say("Loaded %s scan: %s   %s" % (role.upper(), spec.name, spec.when))
+        self._report_instrument_metadata(spec, role)
         if role == "water" and self.slots["panel"] is None:
             if spec.has("rad_ref"):
                 self.say("   panel radiance will come from this file's Rad. (Ref.) "
@@ -306,6 +314,73 @@ class App(tk.Tk):
         self.say("   " + p.sun.advice())
         if not p.sun.usable:
             messagebox.showwarning("Solar zenith", p.sun.advice())
+
+    def _report_instrument_metadata(self, spec, role):
+        """Surface what the instrument itself logged: attitude, solar angle, footprint."""
+        uf = spec.user_fields
+        if uf:
+            self.say("   instrument logged: " +
+                     ", ".join("%s %s" % (k, v) for k, v in uf.items()))
+        if spec.solar_elevation_deg is not None:
+            self.say("   Solar Angle %.2f deg is solar ELEVATION (verified against an "
+                     "independent calculation)." % spec.solar_elevation_deg)
+        # The instrument clock is set by hand and can be wrong; GPS time is UTC.
+        gps = spec.gps_time
+        if gps is not None:
+            self.say("   GPS time %.2f h UTC -- USE THIS for solar geometry, not the "
+                     "instrument clock." % gps)
+        try:
+            vz = float(self.view_zen.get())
+        except Exception:
+            vz = 40.0
+        fp = spec.footprint(vz)
+        if fp is not None and role == "water":
+            self.last_footprint = fp
+            self.say("   FOOTPRINT at %.0f deg: %.2f x %.2f m ellipse, %.2f m2, "
+                     "sensor %.2f m above the surface, spot %.2f m out."
+                     % (vz, fp["spot_across_m"], fp["spot_along_m"], fp["area_m2"],
+                        fp["height_above_surface_m"], fp["horizontal_offset_m"]))
+            self.say("   (an OLCI 300 m pixel is %.0fx that area; MODIS 1 km, %.0fx)"
+                     % (300*300/fp["area_m2"], 1000*1000/fp["area_m2"]))
+            self.draw_footprint()
+
+    def draw_footprint(self):
+        """To-scale plan view of the water patch this scan actually averaged over."""
+        fp = getattr(self, "last_footprint", None)
+        c = self.fp_canvas
+        c.delete("all")
+        W = c.winfo_width() or 360
+        H = c.winfo_height() or 190
+        if not fp:
+            c.create_text(W/2, H/2, text="footprint appears when a WATER scan is loaded",
+                          font=("Segoe UI", 9), fill="#888")
+            return
+        a, b = fp["spot_along_m"], fp["spot_across_m"]      # along-view, across-view
+        span = max(a, b, 1.0) * 1.45
+        sc = min(W - 60, H - 46) / span
+        cx, cy = W/2, H/2 + 6
+
+        # 1 m scale bar
+        c.create_line(14, H-14, 14 + sc, H-14, fill="#333", width=3)
+        c.create_text(14 + sc/2, H-26, text="1 m", font=("Consolas", 9))
+
+        c.create_oval(cx - a*sc/2, cy - b*sc/2, cx + a*sc/2, cy + b*sc/2,
+                      outline="#0b6", width=3, fill="#d9f2e4")
+        c.create_text(cx, cy - 4, text="%.2f x %.2f m" % (a, b),
+                      font=("Segoe UI", 10, "bold"), fill="#064")
+        c.create_text(cx, cy + 14, text="%.2f m\u00b2" % fp["area_m2"],
+                      font=("Segoe UI", 9), fill="#064")
+        c.create_text(W/2, 14,
+                      text="water patch sampled  (view %.0f deg, range %.2f m, FOV %.0f deg)"
+                           % (fp["view_zenith_deg"], fp["range_m"], fp["fov_deg"]),
+                      font=("Segoe UI", 9))
+        # instrument position, projected
+        ix = cx - fp["horizontal_offset_m"] * sc
+        if ix > 8:
+            c.create_line(ix, cy, cx, cy, fill="#888", dash=(3, 3))
+            c.create_oval(ix-4, cy-4, ix+4, cy+4, fill="#333")
+            c.create_text(ix, cy - 16, text="sensor\n(%.1f m up)" % fp["height_above_surface_m"],
+                          font=("Consolas", 8), fill="#333")
 
     def clear_slots(self):
         for role in self.slots:
@@ -449,6 +524,16 @@ class App(tk.Tk):
             "relative_azimuth_from_sun_deg": self.rel_az.get(),
             "wind_speed_ms": self.wind.get() or "NOT RECORDED",
         }
+        fp = getattr(self, "last_footprint", None)
+        if fp is not None:
+            meta.update({
+                "footprint_across_m": "%.3f" % fp["spot_across_m"],
+                "footprint_along_m": "%.3f" % fp["spot_along_m"],
+                "footprint_area_m2": "%.3f" % fp["area_m2"],
+                "sensor_height_m": "%.3f" % fp["height_above_surface_m"],
+                "range_m": "%.3f" % fp["range_m"],
+                "fov_deg": "%.1f" % fp["fov_deg"],
+            })
         p = self.last_pointing
         if p is not None:
             meta.update({
