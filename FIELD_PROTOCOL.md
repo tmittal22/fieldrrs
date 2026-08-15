@@ -105,6 +105,83 @@ target and you do not need a separate panel file.
 DARWin Comment field or the filename. The GUI guesses the role from those words and you
 confirm with one tap. It never assumes silently.
 
+### 135 deg or 90 deg? Read this before you set up
+
+The IOCCG Protocol Series v3.0 (Ch. 5) endorses Mobley's 40 deg / 135 deg as the geometry
+that best minimises sun glint, and then immediately qualifies it:
+
+> "the use of phi = 135 deg may easily become the source of perturbations in L_T
+> measurements because the radiometer necessarily looks at the sea close to the
+> deployment structure or at its shadow. This limitation, which becomes more severe with
+> large sun zenith angles, would suggest that phi = 90 deg is a better solution"
+
+Their Fig. 5.1 shows **40 deg / 90 deg** as the geometry "commonly applied".
+
+- **From a boat, pier or any structure**: use **phi = 90 deg**. Looking back at 135 deg
+  puts the hull, its shadow or its wake in the field of view, and that ruins the scan
+  more thoroughly than the extra glint at 90 deg.
+- **From a small craft, a rock or wading, with nothing behind you**: **135 deg** is better.
+
+Set it in the GUI. Whichever you choose, use the SAME geometry all day: the protocol
+notes that a single consistent geometry gives more consistent products than switching
+geometry to chase conditions.
+
+### Using your phone as the compass
+
+The solar azimuth the GUI computes is a **true** bearing. Your phone compass reads
+**magnetic**, and the two differ by the local magnetic declination (about -11 deg in
+Pennsylvania, tens of degrees elsewhere). Pointing 11 deg off is a real error in the
+relative azimuth.
+
+You do not need to look declination up. Calibrate against the sun itself:
+
+1. Press **WHERE IS THE SUN?** in the GUI. It gives the true solar azimuth.
+2. Point the phone at the sun's bearing (at its horizontal direction; **do not look at
+   the sun**, and do not sight it through the instrument optics) and read the compass.
+3. declination = true solar azimuth − compass reading.
+
+That one sighting absorbs both the local declination and any constant offset in the
+phone's magnetometer, which a published declination value does not. Enter it and the GUI
+prints the magnetic bearings your phone should actually read. Redo it if you move a long
+way, or after standing near anything ferrous: engine block, railing, winch.
+
+Your phone's inclinometer or level app also sets the 50 deg tilt below horizontal.
+
+### Wind speed: what "velocity instrument" means, and what you actually need
+
+Wind speed is standard required metadata in every above-water protocol, including IOCCG
+v3.0, which lists "sea state; wind speed and direction; air and water temperature" plus
+photographs of the conditions. It is not bureaucratic: rho is a function of
+(theta, phi, theta_sun, **W**), so a measurement without a wind speed cannot be
+reprocessed with a better rho later.
+
+**You do not need a dedicated instrument.** In order of preference:
+
+1. **Handheld anemometer** — a basic one is about USD 25, a Kestrel is the research
+   standard. Best if you will do this repeatedly.
+2. **The boat's instruments**, if there are any.
+3. **Beaufort estimate from the sea surface.** Standard, accepted, and free:
+
+| Beaufort | wind | what the water looks like | rho status |
+|---|---|---|---|
+| 0 | < 0.5 m/s | mirror | 0.028 fine |
+| 1 | 0.5-1.5 m/s | ripples, no foam crests | 0.028 fine |
+| 2 | 2-3 m/s | small wavelets, glassy crests, no breaking | 0.028 fine |
+| 3 | 3.5-5 m/s | large wavelets, crests begin to break, **scattered whitecaps** | at the limit |
+| 4 | 5.5-8 m/s | small waves, **frequent whitecaps** | **0.028 invalid** |
+| 5+ | > 8 m/s | moderate waves, many whitecaps, spray | do not measure |
+
+**The practical rule: when whitecaps start appearing, you have reached the edge of where
+rho = 0.028 is valid.** Beyond that, record the sea state, take the measurement if you
+must, and flag it. The GUI will tell you the same thing if you enter the wind speed.
+
+4. **A weather app or nearby station** — adequate on an open coast, poor in sheltered or
+   fetch-limited water where local wind differs from the regional value.
+
+Also worth recording per IOCCG: **wind direction**, and a **photograph of the sky and the
+water** at each station. A photo settles arguments later about cloud and sea state that
+no number can.
+
 ---
 
 ## Record for every station

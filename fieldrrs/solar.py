@@ -20,9 +20,24 @@ __all__ = [
     "SOLAR_ZENITH_MIN", "SOLAR_ZENITH_MAX",
 ]
 
-#: Mobley (1999) recommended viewing geometry.
+#: Mobley (1999) recommended viewing geometry, endorsed by the IOCCG Protocol Series
+#: (2019), "Protocols for Satellite Ocean Colour Data Validation: In Situ Optical
+#: Radiometry" v3.0, Ch. 5: "a viewing angle theta of 40 deg and a relative azimuth phi
+#: of 135 deg are the most appropriate to minimize sun-glint perturbations".
 DEFAULT_VIEW_ZENITH = 40.0        # degrees from NADIR (straight down)
 DEFAULT_RELATIVE_AZIMUTH = 135.0  # degrees in azimuth away from the sun
+
+#: The same IOCCG chapter immediately qualifies 135 deg: it "may easily become the
+#: source of perturbations ... because the radiometer necessarily looks at the sea close
+#: to the deployment structure or at its shadow", worsening at large solar zenith, "which
+#: would suggest that phi = 90 deg is a better solution". Their Fig. 5.1 shows 40/90 as
+#: the geometry "commonly applied". Use 90 from a boat or pier; 135 is better from a
+#: small or shore-based setup where nothing is in the way.
+ALT_RELATIVE_AZIMUTH = 90.0
+
+#: Above ~20 deg full-angle the sky-glint contribution varies too much across the field
+#: of view (IOCCG v3.0 Ch. 5, "Field-of-view").
+MAX_RECOMMENDED_FOV_DEG = 20.0
 
 #: Usable solar-zenith window for above-water radiometry. Outside it, either the sun is
 #: high enough that glint is hard to avoid, or low enough that the signal is weak and
@@ -96,11 +111,14 @@ class Pointing(object):
         """Elevation above the horizon for the sky scan. Mirror of the water scan."""
         return 90.0 - self.view_zenith
 
-    def describe(self):
-        return [
-            "SUN is at %.0f deg (%s), %.0f deg above the horizon."
+    def describe(self, declination=None):
+        """Pointing instructions. Pass ``declination`` to also give phone-compass
+        (magnetic) bearings, which is what the phone will actually read."""
+        lines = [
+            "SUN is at %.0f deg TRUE (%s), %.0f deg above the horizon."
             % (self.sun.azimuth, self.sun.compass, self.sun.elevation),
-            "WATER: aim %.0f deg (%s) or %.0f deg (%s), tilted %.0f deg BELOW horizontal."
+            "WATER: aim %.0f deg (%s) or %.0f deg (%s) TRUE, tilted %.0f deg BELOW "
+            "horizontal."
             % (self.bearing_ccw, compass_point(self.bearing_ccw),
                self.bearing_cw, compass_point(self.bearing_cw),
                self.tilt_from_horizontal),
@@ -108,10 +126,51 @@ class Pointing(object):
             % self.sky_elevation,
             "PANEL: level, face up, viewed from straight down.",
         ]
+        if declination is not None:
+            lines.append(
+                "PHONE COMPASS (magnetic, declination %+.1f deg): sun should read "
+                "%.0f, water bearings %.0f or %.0f."
+                % (declination,
+                   magnetic_from_true(self.sun.azimuth, declination),
+                   magnetic_from_true(self.bearing_ccw, declination),
+                   magnetic_from_true(self.bearing_cw, declination)))
+        return lines
 
 
 def compass_point(azimuth):
     return _COMPASS[int((azimuth % 360.0) / 22.5 + 0.5) % 16]
+
+
+def declination_from_sun_sighting(true_solar_azimuth, compass_reading_of_sun):
+    """Calibrate a phone compass against the sun. Returns magnetic declination, degrees.
+
+    A phone compass reads MAGNETIC bearing; the solar azimuth computed here is TRUE
+    bearing. The two differ by the local magnetic declination, which is roughly -10 deg
+    in Pennsylvania and varies by tens of degrees elsewhere. Pointing at a bearing that
+    is 10 deg wrong is a real error in the 135 deg relative azimuth.
+
+    You do not need a lookup table for this. Point the phone at the sun, read the
+    magnetic bearing, and pass it here with the computed true solar azimuth:
+
+        declination = true_solar_azimuth - compass_reading_of_sun
+
+    That single sighting absorbs the local declination AND any constant offset in the
+    phone's magnetometer, which a published declination value does not. Redo it if you
+    move a long way, or after being near anything ferrous.
+
+    Do not sight the sun through the instrument optics, and do not look at it directly.
+    """
+    return ((true_solar_azimuth - compass_reading_of_sun + 180.0) % 360.0) - 180.0
+
+
+def true_from_magnetic(magnetic_bearing, declination):
+    """Convert a phone-compass (magnetic) bearing to a true bearing."""
+    return (magnetic_bearing + declination) % 360.0
+
+
+def magnetic_from_true(true_bearing, declination):
+    """Convert a true bearing to what the phone compass should read."""
+    return (true_bearing - declination) % 360.0
 
 
 def julian_day(year, month, day, hour_utc=0.0):

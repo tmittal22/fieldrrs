@@ -14,7 +14,9 @@ from fieldrrs import (  # noqa: E402
 )
 from fieldrrs.sed import guess_role  # noqa: E402
 from fieldrrs.solar import (  # noqa: E402
-    compass_point, local_to_utc_hours, pointing, solar_position,
+    ALT_RELATIVE_AZIMUTH, compass_point, declination_from_sun_sighting,
+    local_to_utc_hours, magnetic_from_true, pointing, solar_position,
+    true_from_magnetic,
 )
 
 WL = [350.0 + i for i in range(651)]          # 350-1000 nm at 1 nm
@@ -356,6 +358,38 @@ class TestSolarPosition(unittest.TestCase):
         h, shift = local_to_utc_hours(1, 0, 5.5)         # 01:00 IST -> 19:30 UTC prev day
         self.assertAlmostEqual(h, 19.5)
         self.assertEqual(shift, -1)
+
+    def test_sun_sighting_recovers_declination(self):
+        """Point the phone at the sun, read magnetic, get declination. No lookup table."""
+        p = pointing(self.LAT, self.LON, 2026, 8, 15, 16.0)
+        true_dec = -11.0
+        reading = magnetic_from_true(p.sun.azimuth, true_dec)
+        self.assertAlmostEqual(
+            declination_from_sun_sighting(p.sun.azimuth, reading), true_dec, places=9)
+
+    def test_magnetic_true_round_trip(self):
+        for dec in (-11.0, 0.0, +14.5):
+            for b in (5.0, 175.0, 359.0):
+                self.assertAlmostEqual(
+                    true_from_magnetic(magnetic_from_true(b, dec), dec), b, places=9)
+
+    def test_declination_wraps_the_short_way(self):
+        """Sun at 5 deg true, compass reads 355: that is +10, not -350."""
+        self.assertAlmostEqual(declination_from_sun_sighting(5.0, 355.0), 10.0, places=9)
+
+    def test_describe_includes_magnetic_when_declination_given(self):
+        p = pointing(self.LAT, self.LON, 2026, 8, 15, 16.0)
+        self.assertFalse(any("PHONE COMPASS" in x for x in p.describe()))
+        self.assertTrue(any("PHONE COMPASS" in x for x in p.describe(declination=-11.0)))
+
+    def test_alternate_90_degree_azimuth_is_supported(self):
+        """IOCCG v3.0 Fig 5.1 shows 40/90 as the geometry commonly applied from a
+        structure, because 135 points back at the hull or its shadow."""
+        p = pointing(self.LAT, self.LON, 2026, 8, 15, 16.0,
+                     relative_azimuth=ALT_RELATIVE_AZIMUTH)
+        for b in (p.bearing_ccw, p.bearing_cw):
+            sep = abs((b - p.sun.azimuth + 180) % 360 - 180)
+            self.assertAlmostEqual(sep, 90.0, delta=1e-6)
 
     def test_compass_points(self):
         self.assertEqual(compass_point(0), "N")

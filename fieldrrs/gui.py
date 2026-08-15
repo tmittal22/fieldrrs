@@ -24,9 +24,11 @@ from .rrs import (
 )
 from .sed import guess_role, read_folder, read_sed
 from .solar import (
+    ALT_RELATIVE_AZIMUTH,
     DEFAULT_RELATIVE_AZIMUTH,
     DEFAULT_VIEW_ZENITH,
     compass_point,
+    declination_from_sun_sighting,
     local_to_utc_hours,
     pointing,
 )
@@ -141,13 +143,15 @@ class App(tk.Tk):
         gg.pack(fill=tk.X)
         self.view_zen = self._entry(gg, "View zenith (from nadir)",
                                     str(DEFAULT_VIEW_ZENITH), 0)
-        self.rel_az = self._entry(gg, "Relative azimuth from sun",
-                                  str(DEFAULT_RELATIVE_AZIMUTH), 1)
+        self.rel_az = self._combo(gg, "Rel. azimuth from sun",
+                                  [str(DEFAULT_RELATIVE_AZIMUTH),
+                                   str(ALT_RELATIVE_AZIMUTH)], 1)
         self.lat = self._entry(gg, "Latitude (N +)", "", 2)
         self.lon = self._entry(gg, "Longitude (E +)", "", 3)
         self.date = self._entry(gg, "Date  YYYY-MM-DD", "", 4)
         self.clock = self._entry(gg, "Local time  HH:MM", "", 5)
         self.utc_off = self._entry(gg, "UTC offset (h)", "0", 6)
+        self.mag_dec = self._entry(gg, "Mag. declination (deg)", "", 9)
         tk.Button(gg, text="WHERE IS THE SUN?  ->  bearings", font=BIGB, height=2,
                   bg="#c60", fg="white", command=self.where_is_the_sun).grid(
                       row=7, column=0, columnspan=2, sticky="ew", pady=4)
@@ -288,8 +292,17 @@ class App(tk.Tk):
         self.say("")
         self.say("=== POINTING  (%04d-%02d-%02d %02d:%02d local, %.2f h UTC) ==="
                  % (dd.year, dd.month, dd.day, hh, mm, hour_utc))
-        for line in p.describe():
+        dec = None
+        try:
+            dec = float(self.mag_dec.get()) if self.mag_dec.get().strip() else None
+        except ValueError:
+            self.say("   (magnetic declination not a number, ignoring)")
+        for line in p.describe(declination=dec):
             self.say("   " + line)
+        if dec is None:
+            self.say("   TIP: point your phone at the sun, read the magnetic bearing,")
+            self.say("        then set Mag. declination = %.0f minus that reading."
+                     % p.sun.azimuth)
         self.say("   " + p.sun.advice())
         if not p.sun.usable:
             messagebox.showwarning("Solar zenith", p.sun.advice())

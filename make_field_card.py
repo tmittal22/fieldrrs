@@ -230,10 +230,11 @@ def steps(ax):
         ("3.  WATER", WATER, "white",
          "Water at 40° from NADIR\n"
          "= 50° BELOW horizontal,\n"
-         "135° in azimuth from the sun.\n\n"
-         "No visible glint, no foam or\n"
-         "whitecaps, no boat shadow,\n"
-         "no wake.\n\n"
+         "135° in azimuth from the sun.\n"
+         "FROM A BOAT OR PIER use 90°:\n"
+         "135° looks back at the hull\n"
+         "or its shadow (IOCCG v3.0).\n"
+         "No glint, foam or wake.\n\n"
          "DARWin: TARGET scan. Save.\n"
          "Repeat 2 and 3 five times."),
         ("RECORD", "#8a7000", "#fff6d5",
@@ -243,6 +244,7 @@ def steps(ax):
          "  valid below ~5 m/s.\n"
          "Cloud, or sun obscured?\n"
          "Time + lat/lon → solar angle\n"
+         "Wind DIRECTION + a photo\n"
          "Water clear or turbid?\n"
          "  turbid → do NOT use nir_zero\n"
          "Panel reflectance used (0.99?)"),
