@@ -143,18 +143,30 @@ write_rrs_csv("station1_rrs.csv", res)
 python tests/test_fieldrrs.py
 ```
 
-24 tests, standard library only. They build `.sed` files from a **known** R_rs, read them
+52 tests, standard library only. They build `.sed` files from a **known** R_rs, read them
 back through the full chain, and check the physics inverts to 9 decimal places, with
 controls confirming that a wrong rho, a wrong panel reflectance, and the turbid-water
 `nir_zero` failure mode all change the answer in the direction they should. One test
 asserts the package imports nothing outside the standard library, because that is the
 property the field deployment depends on.
 
-## What this is not
+## What this is not, and what to use next
 
-It produces R_rs. It does not invert for IOPs. The `rrs_all_stations.csv` it writes is
-the input to an ocean-colour inversion (GIOP, or the titanspec registry model), which
-lives elsewhere and needs numpy and scipy.
+It produces R_rs. It does not invert for IOPs.
+
+The CSVs it writes are read directly by
+**[giop-workbench](https://github.com/tmittal22/giop-workbench)**, which runs the GIOP
+semi-analytical inversion. It parses the `#` header too, not just the two data columns, so
+ρ, the glint method, the geometry, the wind speed and the footprint travel with the
+spectrum and the inversion can warn about them. It also offers BRDF normalisation using
+the geometry recorded here, which is what you need before comparing against a satellite
+product.
+
+```python
+from giop.io import read_fieldrrs_csv
+fs = read_fieldrrs_csv("station1.csv")
+print(fs.review())        # what should change your interpretation
+```
 
 ## References
 
