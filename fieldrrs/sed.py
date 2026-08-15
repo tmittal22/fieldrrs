@@ -113,10 +113,25 @@ class SedSpectrum(object):
             self.name, len(w), w[0], w[-1], sorted(self.columns))
 
 
+#: Columns DARWin can write that fieldrrs does not need. Listed so the diagnostic can
+#: report "known, not used" rather than "unrecognised", which would read as a defect.
+KNOWN_UNUSED = ("Tgt./Ref. %", "Tgt./Ref.", "Chan#", "Counts",
+                "Raw Detector Counts", "Normalized Detector Counts")
+
+
 def read_sed(path, encoding="latin-1"):
-    """Parse one .sed file. Raises ValueError with a readable message on bad input."""
-    with open(path, "r", encoding=encoding, errors="replace") as fh:
-        lines = fh.read().splitlines()
+    """Parse one .sed file. Raises ValueError with a readable message on bad input.
+
+    ``encoding`` defaults to latin-1 because DARWin writes Windows-encoded degree and
+    micro signs into the header. A UTF-8 BOM, if present, is stripped before decoding:
+    decoded as latin-1 it would otherwise become three visible characters glued to the
+    first header key, silently turning "Version" into something no lookup can find.
+    """
+    with open(path, "rb") as fh:
+        raw = fh.read()
+    if raw.startswith(b"\xef\xbb\xbf"):
+        raw = raw[3:]
+    lines = raw.decode(encoding, errors="replace").splitlines()
 
     header, marker = {}, None
     for i, line in enumerate(lines):

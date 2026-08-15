@@ -95,6 +95,37 @@ class TestSedReader(unittest.TestCase):
             fh.write("Data:\nWvl\tIrr. (Ref.)\n400.0\t1.5\n401.0\t1.6\n")
         self.assertIn("irr_ref", read_sed(p).columns)
 
+    def test_utf8_bom_does_not_corrupt_the_first_header_key(self):
+        """A BOM decoded as latin-1 glues three characters onto the first key, so
+        'Version' becomes unfindable. Caught by running check_sed.py on a BOM file."""
+        p = os.path.join(self.tmp, "bom.sed")
+        body = "Version: 2.1\nComment: x\nData:\nWvl\tReflect. %\n400.0\t50.0\n401.0\t50.0\n"
+        with open(p, "w", encoding="utf-8-sig") as fh:
+            fh.write(body)
+        s = read_sed(p)
+        self.assertIn("Version", s.header)
+        self.assertEqual(s.header["Version"], "2.1")
+
+    def test_crlf_and_trailing_space_on_the_data_marker(self):
+        """Real Windows exports have CRLF endings, and 'Data:' may carry trailing
+        whitespace. Neither may break the parse."""
+        p = os.path.join(self.tmp, "crlf.sed")
+        with open(p, "w", newline="") as fh:
+            fh.write("Comment: x\r\nData:  \r\nWvl\tReflect. %\r\n400.0\t50.0\r\n"
+                     "401.0\t50.0\r\n")
+        s = read_sed(p)
+        self.assertEqual(len(s.wavelength), 2)
+        self.assertAlmostEqual(s.reflectance[0], 0.5)
+
+    def test_unknown_extra_columns_are_ignored_not_fatal(self):
+        p = os.path.join(self.tmp, "extra.sed")
+        with open(p, "w") as fh:
+            fh.write("Data:\nWvl\tTgt./Ref. %\tReflect. %\tSomethingNew\n"
+                     "400.0\t50.0\t50.0\t1.0\n401.0\t50.0\t50.0\t1.0\n")
+        s = read_sed(p)
+        self.assertAlmostEqual(s.reflectance[0], 0.5)
+        self.assertIn("SomethingNew", s.raw_columns)
+
     def test_missing_data_marker_is_explained(self):
         p = os.path.join(self.tmp, "bad.sed")
         with open(p, "w") as fh:
