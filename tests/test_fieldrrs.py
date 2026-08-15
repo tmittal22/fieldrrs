@@ -9,7 +9,7 @@ import unittest
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from fieldrrs import (  # noqa: E402
-    RHO_MOBLEY1999, bin_spectrum, gaussian_resample, read_sed, residual_correction,
+    RHO_MOBLEY1999, overcast_notes, bin_spectrum, gaussian_resample, read_sed, residual_correction,
     rho_advice, rrs_from_sed, rrs_three_scan, write_batch_csv, write_rrs_csv,
 )
 from fieldrrs.sed import guess_role  # noqa: E402
@@ -501,6 +501,78 @@ class TestNoThirdPartyImports(unittest.TestCase):
                 self.assertNotIn("import %s" % b, src, "%s imports %s" % (fn, b))
                 self.assertNotIn("from %s" % b, src, "%s imports %s" % (fn, b))
 
+class TestOvercastAndMeasuredEd(unittest.TestCase):
+    """Fully overcast work, and E_d measured rather than inferred from a panel."""
+
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp()
+
+    def _station_with_irradiance(self, rrs_fn, rho=RHO_MOBLEY1999):
+        """Write scans that also carry a cosine-collector E_d column."""
+        ed = [1.0 * math.exp(-((w - 550) ** 2) / (2 * 300.0 ** 2)) + 0.2 for w in WL]
+        l_panel = [e * 0.99 / math.pi for e in ed]
+        l_sky = [0.02 * e / math.pi for e in ed]
+        truth = [rrs_fn(w) for w in WL]
+        l_water = [truth[i] * ed[i] + rho * l_sky[i] for i in range(len(WL))]
+
+        def write(path, tgt, irr):
+            lines = ["Comment: x", "Data:",
+                     "\t".join(["Wvl", "Rad. (Ref.)", "Rad. (Target)", "Irr. (Target)"])]
+            for i, w in enumerate(WL):
+                lines.append("\t".join(darwin_float(v) for v in
+                                       (w, l_panel[i], tgt[i], irr[i])))
+            open(path, "w").write("\n".join(lines))
+            return path
+
+        w = write(os.path.join(self.tmp, "w.sed"), l_water, ed)
+        s = write(os.path.join(self.tmp, "s.sed"), l_sky, ed)
+        return w, s, truth
+
+    def test_measured_ed_recovers_the_known_rrs(self):
+        """Closure through the irradiance path, independent of any panel."""
+        w, s, truth = self._station_with_irradiance(clear_water)
+        res = rrs_from_sed(read_sed(w), read_sed(s), None, source="irradiance")
+        for got, want in zip(res.rrs, truth):
+            self.assertAlmostEqual(got, want, places=9)
+
+    def test_measured_ed_does_not_depend_on_panel_reflectance(self):
+        """The whole point: the panel does not enter, so its calibration cannot bias
+        the answer. The radiance path scales linearly with it; this must not."""
+        w, s, _ = self._station_with_irradiance(clear_water)
+        a = rrs_from_sed(read_sed(w), read_sed(s), None, panel_reflectance=0.99,
+                         source="irradiance")
+        b = rrs_from_sed(read_sed(w), read_sed(s), None, panel_reflectance=0.50,
+                         source="irradiance")
+        for x, y in zip(a.rrs, b.rrs):
+            self.assertAlmostEqual(x, y, places=12)
+
+    def test_missing_irradiance_column_is_explained(self):
+        w, s, _, _ = synthetic_station(self.tmp, clear_water)   # radiance only
+        with self.assertRaises(KeyError) as cm:
+            rrs_from_sed(read_sed(w), read_sed(s), None, source="irradiance")
+        self.assertIn("cosine", str(cm.exception))
+
+    def test_overcast_relaxes_the_wind_limit(self):
+        """Under a uniform sky rho stops being strongly wind-dependent, so a wind that
+        would be refused under clear sky is accepted with a caveat instead."""
+        clear_val, _ = rho_advice(12.0, sky="clear")
+        over_val, over_msg = rho_advice(12.0, sky="overcast")
+        self.assertIsNone(clear_val)
+        self.assertEqual(over_val, RHO_MOBLEY1999)
+        self.assertIn("BROKEN CLOUD", over_msg)
+
+    def test_overcast_notes_carry_the_load_bearing_warnings(self):
+        text = " ".join(overcast_notes())
+        self.assertIn("NO SUN GLINT", text)
+        self.assertIn("DO NOT apply the BRDF", text)
+        self.assertIn("BROKEN CLOUD IS THE WORST CASE", text)
+        self.assertIn("No satellite match-up", text)
+
+    def test_unknown_source_names_the_valid_set(self):
+        w, s, _, _ = synthetic_station(self.tmp, clear_water)
+        with self.assertRaises(ValueError) as cm:
+            rrs_from_sed(read_sed(w), read_sed(s), None, source="nonsense")
+        self.assertIn("irradiance", str(cm.exception))
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

@@ -182,6 +182,78 @@ Also worth recording per IOCCG: **wind direction**, and a **photograph of the sk
 water** at each station. A photo settles arguments later about cloud and sea state that
 no number can.
 
+### Fully overcast: not a lost day
+
+A uniformly overcast sky is a **usable measurement condition**, and in one respect it is
+better than clear sky. What changes:
+
+**Better under full cloud**
+
+- **No sun glint.** The specular sun beam is the dominant error in above-water
+  radiometry, and under thick cloud there is no beam. The single hardest thing to avoid
+  goes away.
+- **rho is more stable and barely wind-dependent.** The wind sensitivity of rho comes
+  from wave facets sampling *different parts of a non-uniform sky*: tilt a facet under a
+  clear sky and it swings between bright horizon and dark zenith. Under a uniform sky
+  there is little to sample between, so facet orientation stops mattering. rho = 0.028 is
+  a defensible choice under overcast even in wind that would rule it out on a clear day.
+
+**Worse under full cloud**
+
+- **E_d is much lower**, so signal-to-noise drops. Increase integration time and take
+  more replicates.
+- **No satellite match-up is possible.** The satellite cannot see the water through the
+  cloud either.
+- **Do NOT apply the BRDF normalisation.** The Morel f/Q tables describe a clear-sky
+  light field with a direct beam. Under full overcast the field is entirely diffuse and
+  those tables do not describe it.
+
+**Changes to the protocol**
+
+- The **135° relative azimuth stops meaning anything** — there is no sun direction to
+  point away from. Keep the 40° view angle, and pick the bearing purely to avoid the
+  platform, its shadow and its wake.
+- Keep everything else: three scans, level panel, sky at the mirror angle.
+- Record **"overcast"** in your notes. It changes how rho and the BRDF should be treated
+  downstream, and nothing in the file records the sky state for you.
+
+### ⚠ Broken cloud is the worst case, worse than either extreme
+
+Not thick cloud: **patchy, moving cloud.** The panel method assumes E_d is the same at
+the moment of the panel scan and the moment of the target scan. Under broken cloud it is
+not, and the error is unbounded and invisible in the output.
+
+If the sky is patchy, either wait for it to become uniformly overcast or uniformly clear,
+or use the irradiance channel below.
+
+### Your cosine-collector irradiance sensor solves exactly this
+
+If you take an E_d scan with the cosine diffuser fitted, DARWin writes an
+`Irr. (Target)` or `Irr. (Ref.)` column, and the software can use **measured E_d** rather
+than inferring it from the panel:
+
+```python
+res = rrs_from_sed(water, sky, source="irradiance")
+```
+
+What that buys:
+
+- **No panel-to-target time lag.** E_d is measured with the target, so changing light
+  stops being an error. This is the fix for broken cloud.
+- **The panel reflectance drops out entirely.** No 0.99 assumption, no calibration
+  certificate, no direct multiplicative bias.
+- **Panel levelness stops mattering.** The cosine collector defines the horizontal plane
+  itself.
+
+Conditions: the irradiance channel must be radiometrically calibrated in W m⁻² nm⁻¹ and
+consistent with the radiance calibration, and the collector must be **level** for the
+same reason the panel had to be. Its cosine response error is also better behaved under
+diffuse light than under a low direct sun, so overcast is where it performs best.
+
+Verified by test: the irradiance path recovers a known R_rs to 9 decimal places and is
+completely independent of the panel reflectance, where the radiance path scales linearly
+with it.
+
 ---
 
 ## Record for every station

@@ -105,8 +105,15 @@ R_rs(l) = L_w(l) / E_d(l) - delta
 
 - `rho` is the effective sea-surface radiance reflectance. **Not** the Fresnel
   coefficient. Default 0.028 (Mobley 1999) for 40°/135°, wind under ~5 m s⁻¹, clear sky.
+  Under **uniform overcast** it is more stable and barely wind-dependent; call
+  `rho_advice(wind, sky="overcast")`.
 - `delta` is the residual glint offset: `none` (default), `nir_zero` (clear water only),
   or `nir_similarity` (Ruddick et al. 2006, usable in turbid water).
+
+`source="irradiance"` uses **measured E_d** from a cosine collector instead of inferring
+it from the panel. Preferred whenever the light is changing: it removes the
+panel-to-target time lag, the panel reflectance and the panel-levelness error at once.
+See `overcast_notes()` and FIELD_PROTOCOL.md for when this matters.
 
 **No wind-dependent rho table is bundled.** Mobley (2015) published one and it is not
 redistributable. Above ~5 m s⁻¹ the software refuses to invent a value and tells you what
@@ -143,7 +150,7 @@ write_rrs_csv("station1_rrs.csv", res)
 python tests/test_fieldrrs.py
 ```
 
-52 tests, standard library only. They build `.sed` files from a **known** R_rs, read them
+58 tests, standard library only. They build `.sed` files from a **known** R_rs, read them
 back through the full chain, and check the physics inverts to 9 decimal places, with
 controls confirming that a wrong rho, a wrong panel reflectance, and the turbid-water
 `nir_zero` failure mode all change the answer in the direction they should. One test

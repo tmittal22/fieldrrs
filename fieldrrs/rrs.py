@@ -21,6 +21,7 @@ import math
 __all__ = [
     "RHO_MOBLEY1999", "SIMILARITY_780_870", "RrsResult",
     "rrs_three_scan", "rrs_from_sed", "residual_correction", "rho_advice",
+    "overcast_notes",
 ]
 
 #: Mobley (1999) effective sea-surface radiance reflectance for the recommended
@@ -62,14 +63,29 @@ class RrsResult(object):
         return self.wavelength[i], self.rrs[i]
 
 
-def rho_advice(wind_ms):
-    """What to do about rho at a given wind speed. Returns (rho_or_None, message).
+def rho_advice(wind_ms, sky="clear"):
+    """What to do about rho at a given wind speed and sky. Returns (rho_or_None, msg).
 
-    There is no wind-dependent rho table bundled here. Mobley (2015) published one and
-    it is not redistributable, so above the validity range of the 0.028 value this
-    function refuses to invent a number and says so. Using 0.028 in a stiff breeze
-    biases blue R_rs high by tens of percent, and that error is invisible in the output.
+    ``sky='overcast'`` changes the answer, and it changes it in the helpful direction.
+    The wind sensitivity of rho comes from wave facets sampling DIFFERENT PARTS OF A
+    NON-UNIFORM SKY: tilt a facet under a clear sky and it swings between bright
+    horizon and dark zenith, so the effective reflectance depends on the facet
+    distribution and therefore on wind. Under a uniformly overcast sky there is little
+    to sample between, so facet orientation stops mattering and rho becomes close to the
+    flat-surface Fresnel value and largely wind-insensitive.
+
+    There is still no bundled wind-dependent table (Mobley 2015 is not redistributable),
+    so under a CLEAR sky above ~5 m/s this refuses to invent a number.
     """
+    if sky == "overcast":
+        return RHO_MOBLEY1999, (
+            "Uniform overcast: rho is close to the flat-surface Fresnel value and only "
+            "weakly wind-dependent, because a uniform sky gives wave facets little to "
+            "sample between. rho = 0.028 is a reasonable choice at %s and the wind "
+            "caveat is much weaker than under clear sky. THE REAL RISK IS BROKEN CLOUD, "
+            "not thick cloud: if the sky is patchy or the cover is changing, E_d moves "
+            "between scans and neither rho nor the panel reference is stable."
+            % ("%.1f m/s" % wind_ms if wind_ms is not None else "any wind"))
     if wind_ms is None:
         return RHO_MOBLEY1999, ("No wind speed recorded. Using rho = 0.028, which "
                                 "assumes wind below ~5 m/s and clear sky. Record the "
@@ -83,6 +99,31 @@ def rho_advice(wind_ms):
         "lookup table, which is NOT bundled with this software. Options: (a) proceed "
         "with 0.028 and record that blue R_rs is biased HIGH, (b) supply a rho from the "
         "published table, (c) re-measure in calmer conditions." % wind_ms)
+
+
+def overcast_notes():
+    """What changes when the sky is fully overcast. Returned as operator-facing text."""
+    return [
+        "NO SUN GLINT. The dominant error in above-water radiometry is the specular "
+        "sun beam, and under full cloud there is no beam. This is the one respect in "
+        "which overcast is BETTER than clear sky.",
+        "The 135 deg relative azimuth stops meaning anything: there is no sun direction "
+        "to point away from. Keep the 40 deg view angle, and choose the bearing purely "
+        "to avoid the platform, its shadow and its wake.",
+        "rho is more stable and only weakly wind-dependent, because a uniform sky gives "
+        "wave facets little to sample between.",
+        "E_d is much lower, so increase integration time and take more replicates. The "
+        "signal is real but the signal-to-noise is not what it was.",
+        "DO NOT apply the BRDF / f-over-Q normalisation. The Morel tables describe a "
+        "clear-sky light field with a direct beam; under full overcast the field is "
+        "entirely diffuse and those tables do not describe it.",
+        "No satellite match-up is possible: an optical sensor cannot see the water "
+        "through the cloud either.",
+        "BROKEN CLOUD IS THE WORST CASE, worse than either clear or fully overcast, "
+        "because E_d changes between the panel scan and the target scan. If you have a "
+        "cosine-collector irradiance channel, use source='irradiance': measuring E_d "
+        "simultaneously removes that time lag entirely.",
+    ]
 
 
 def rrs_three_scan(wavelength, l_target, l_sky, l_panel,
@@ -212,6 +253,10 @@ def rrs_from_sed(water, sky, panel=None,
       contemporaneous with the target.
     * **Three files.** A separate panel scan passed as ``panel``.
 
+    ``source='irradiance'`` uses a MEASURED E_d from a cosine collector instead of
+    inferring it from a panel. Preferred whenever the light is changing, which is most
+    of what makes cloudy-day work hard.
+
     ``source='radiance'`` uses the calibrated radiance columns and is preferred.
     ``source='reflectance'`` falls back to the ``Reflect.`` ratio columns, valid only
     when every scan shares one reference panel, since the panel radiance then cancels.
@@ -241,6 +286,53 @@ def rrs_from_sed(water, sky, panel=None,
         res.meta = meta
         return res
 
+    if source == "irradiance":
+        # E_d measured DIRECTLY by a cosine collector, instead of inferred from a panel.
+        # Strictly better whenever the light is changing, and that is most of what makes
+        # cloudy-day radiometry hard: the panel method assumes E_d is the same at the
+        # moment of the panel scan and the moment of the target scan, and under moving
+        # cloud it is not. A simultaneous irradiance channel removes the time lag, and
+        # with it the panel reflectance (A11) and the panel-levelness error as well.
+        lt = water.radiance_target
+        ls = sky.radiance_target
+        ed = None
+        for src in (water, panel):
+            if src is not None and src.has("irr_target"):
+                ed = src.columns["irr_target"]
+                break
+            if src is not None and src.has("irr_ref"):
+                ed = src.columns["irr_ref"]
+                break
+        if ed is None:
+            raise KeyError(
+                "source='irradiance' needs an 'Irr. (Target)' or 'Irr. (Ref.)' column "
+                "from a cosine-collector scan. %s has: %s. Re-export from DARWin with "
+                "the irradiance channel enabled, or take the E_d scan with the cosine "
+                "diffuser fitted." % (water.name, sorted(water.raw_columns)))
+
+        notes = []
+        rrs = []
+        n_bad = 0
+        for i in range(len(wl)):
+            w = lt[i] - rho * ls[i]
+            if ed[i] > 0:
+                rrs.append(w / ed[i])
+            else:
+                rrs.append(float("nan"))
+                n_bad += 1
+        if n_bad:
+            notes.append("%d bands have zero or negative measured E_d." % n_bad)
+        notes.append("E_d measured directly by a cosine collector, not inferred from a "
+                     "panel. The panel reflectance and its levelness do not enter, and "
+                     "there is no panel-to-target time lag.")
+        off, method, more = residual_correction(wl, rrs, residual)
+        notes.extend(more)
+        rrs = [v - off for v in rrs]
+        res = RrsResult(list(wl), rrs, list(ed), None, float(rho), float(off), method,
+                        notes)
+        res.meta = dict(meta, ed_source="measured irradiance (cosine collector)")
+        return res
+
     if source == "reflectance":
         rt = water.reflectance
         rs = sky.reflectance
@@ -256,7 +348,8 @@ def rrs_from_sed(water, sky, panel=None,
         res.meta = meta
         return res
 
-    raise ValueError("source must be 'radiance' or 'reflectance'")
+    raise ValueError("source must be 'radiance', 'irradiance' or 'reflectance'; "
+                     "got %r" % (source,))
 
 
 def average_results(results):

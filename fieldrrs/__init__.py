@@ -28,6 +28,7 @@ from .rrs import (
     RrsResult,
     average_results,
     residual_correction,
+    overcast_notes,
     rho_advice,
     rrs_from_sed,
     rrs_three_scan,
@@ -40,6 +41,7 @@ __all__ = [
     "read_sed", "read_folder", "SedSpectrum", "guess_role",
     "rrs_from_sed", "rrs_three_scan", "residual_correction", "rho_advice",
     "average_results", "RrsResult", "RHO_MOBLEY1999", "DEFAULT_PANEL_REFLECTANCE",
+    "overcast_notes",
     "bin_spectrum", "gaussian_resample", "write_rrs_csv", "write_batch_csv",
     "SATELLITE_BANDS", "__version__",
 ]
