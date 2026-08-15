@@ -144,8 +144,42 @@ def diagnose(path):
     say("  FIELD METADATA")
     say("    lat / lon        : %s / %s" % (s.latitude, s.longitude))
     say("    date / time      : %s" % (s.when or "(absent)"))
+    say("    GPS time (UTC)   : %s" % (s.header.get("GPS Time") or "(absent)"))
     say("    comment          : %s" % (s.comment or "(empty)"))
     say("    role guessed as  : %s" % guess_role(s))
+
+    if s.user_fields:
+        say("    instrument metadata block:")
+        for k, v in s.user_fields.items():
+            say("      %-14s = %s" % (k, v))
+    if s.fov_deg is not None:
+        ok = s.fov_deg <= 20.0
+        say("    foreoptic FOV    : %.0f deg   %s"
+            % (s.fov_deg, "(within the IOCCG <=20 deg guidance)" if ok
+               else "** ABOVE the 20 deg IOCCG guidance **"))
+
+    # ---- the clock check. A wrong clock silently corrupts the solar geometry.
+    gps = s.gps_time
+    clock = None
+    t = s.header.get("Time", "").split(",")[0].strip()
+    if ":" in t:
+        try:
+            p = t.split(":")
+            clock = float(p[0]) + float(p[1]) / 60.0
+        except ValueError:
+            clock = None
+    if gps is not None and clock is not None:
+        diff = ((gps - clock + 12.0) % 24.0) - 12.0
+        say("    instrument clock : %.2f h    GPS: %.2f h UTC    offset %+.2f h"
+            % (clock, gps, diff))
+        if abs(diff) > 14.0 or (abs(diff) % 1.0 > 0.2 and abs(diff) % 1.0 < 0.8):
+            say("      ** the clock-to-GPS offset is not a whole number of hours, so the")
+            say("         instrument clock is not simply a timezone away from UTC. **")
+        say("      USE THE GPS TIME for solar geometry. The instrument clock is set by")
+        say("      hand and can be wrong; GPS time is UTC by construction.")
+    elif gps is None:
+        say("    ** no GPS Time in this file, so the instrument clock is the only")
+        say("       timestamp. Check it against a phone before trusting solar angles. **")
     if guess_role(s) == "unassigned":
         say("      put 'water', 'sky' or 'panel' in the filename or DARWin Comment and")
         say("      the GUI will pre-sort your scans automatically")

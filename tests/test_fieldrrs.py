@@ -143,6 +143,95 @@ class TestSedReader(unittest.TestCase):
         self.assertEqual(guess_role(read_sed(p)), "panel")
 
 
+REAL_HEADER = (
+    "Comment:\r\n"
+    "Version: 2.4 [2.1.9284]\r\n"
+    "File Name: C:\\Users\\W0168\\Documents\\SpectralEvolution\\x.sed\r\n"
+    "<Metadata>\r\n"
+    "USER_FIELD1: Range: 3.837m\r\n"
+    "USER_FIELD2: Tilt (X): + 4.8\u00b0\r\n"
+    "USER_FIELD3: Tilt (Y): +28.9\u00b0\r\n"
+    "USER_FIELD4: Solar Angle: 32.27\u00b0\r\n"
+    "</Metadata>\r\n"
+    "Instrument: NaturaSpecPlus_SN25494G1 [3]\r\n"
+    "Measurement: REFLECTANCE\r\n"
+    "Date: 08/07/2025,08/07/2025\r\n"
+    "Time: 05:56:02.07,06:07:42.07\r\n"
+    "Foreoptic: FLENS8 {RADIANCE},FLENS8 {RADIANCE}\r\n"
+    "Units: W/m^2/sr/nm\r\n"
+    "Latitude: 40.89674\r\n"
+    "Longitude: -78.20499\r\n"
+    "GPS Time: 13:08:18\r\n"
+    "Channels: 3\r\n"
+    "Columns [4]:\r\n"
+    "Data:\r\n"
+    "Wvl\tRad. (Ref.)\tRad. (Target)\tReflect. %\r\n"
+    "350.0\t1.119097e-002\t4.509495e-005\t0.3794\r\n"
+    "351.0\t1.152954e-002\t4.620102e-005\t0.3751\r\n"
+    "352.0\t1.160930e-002\t4.491070e-005\t0.3689\r\n"
+)
+
+
+class TestRealFileStructure(unittest.TestCase):
+    """Pins everything a REAL NaturaSpecPlus_SN25494G1 export (2025-08-07) revealed.
+
+    The reader was originally built from the DARWin2.exe string table, which did not
+    expose the <Metadata> USER_FIELD block, the 'Columns [N]:' line, or the fact that
+    the file is UTF-8 with degree signs. All four column labels were correctly inferred;
+    these tests keep the rest from regressing.
+    """
+
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp()
+        self.p = os.path.join(self.tmp, "NaturaSpecPlus_SN25494G1_00050.sed")
+        with open(self.p, "w", encoding="utf-8", newline="") as fh:
+            fh.write(REAL_HEADER)
+        self.s = read_sed(self.p)
+
+    def test_all_four_real_columns_are_recognised(self):
+        for c in ("wavelength", "rad_ref", "rad_target", "reflectance"):
+            self.assertIn(c, self.s.columns)
+        self.assertEqual(self.s.reflectance_scale, 100.0)
+
+    def test_degree_signs_survive_decoding(self):
+        """UTF-8 decoded as latin-1 turns every degree sign into 'Â°'."""
+        self.assertNotIn("\u00c2", self.s.header["USER_FIELD2"])
+        self.assertIn("\u00b0", self.s.header["USER_FIELD2"])
+
+    def test_metadata_block_is_parsed(self):
+        uf = self.s.user_fields
+        self.assertEqual(set(uf), {"Range", "Tilt (X)", "Tilt (Y)", "Solar Angle"})
+        self.assertAlmostEqual(self.s.solar_elevation_deg, 32.27)
+        self.assertAlmostEqual(self.s.tilt_x_deg, 4.8)
+        self.assertAlmostEqual(self.s.tilt_y_deg, 28.9)
+        self.assertAlmostEqual(self.s.range_m, 3.837)
+
+    def test_foreoptic_fov(self):
+        """FLENS8 is an 8 deg lens, inside the IOCCG <=20 deg guidance."""
+        self.assertAlmostEqual(self.s.fov_deg, 8.0)
+
+    def test_gps_time_parses_to_utc_hours(self):
+        self.assertAlmostEqual(self.s.gps_time, 13 + 8 / 60.0 + 18 / 3600.0, places=9)
+
+    def test_solar_angle_is_elevation_not_zenith(self):
+        """The instrument's 'Solar Angle' matches computed ELEVATION, not zenith.
+
+        At the logged GPS fix the computed elevation is 31.17 deg against the reported
+        32.27 deg; the 1.10 deg gap is the 5.9 min between the fix and the scan. The
+        zenith at that moment is 58.8 deg, nowhere near, which settles the ambiguity.
+        """
+        sp = solar_position(self.s.latitude, self.s.longitude, 2025, 8, 7,
+                            self.s.gps_time)
+        self.assertAlmostEqual(sp.elevation, self.s.solar_elevation_deg, delta=1.5)
+        self.assertGreater(abs(sp.zenith - self.s.solar_elevation_deg), 20.0)
+
+    def test_empty_comment_and_numeric_filename_give_no_role(self):
+        """Real files have an empty Comment and a serial-numbered filename, so the
+        auto-role guess CANNOT work. The operator must assign, and the GUI asks."""
+        self.assertEqual(self.s.comment, "")
+        self.assertEqual(guess_role(self.s), "unassigned")
+
+
 class TestClosure(unittest.TestCase):
     """Build files from a known R_rs, read them back, check the physics inverts."""
 
