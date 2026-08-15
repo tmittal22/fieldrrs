@@ -1,0 +1,50 @@
+name: build-windows-exe
+
+# Builds fieldrrs.exe on a real Windows runner and attaches it as a downloadable
+# artifact. Use this when you have no Windows machine to hand: push the repo, wait a
+# couple of minutes, download the exe from the Actions tab.
+#
+# PyInstaller cannot cross-compile, which is the whole reason this workflow exists.
+
+on:
+  push:
+    branches: [main, master]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Self-test (pure stdlib, no install needed)
+        run: python tests/test_fieldrrs.py
+
+      - name: Install PyInstaller
+        run: python -m pip install --upgrade pyinstaller
+
+      - name: Build
+        run: python -m PyInstaller --clean --noconfirm fieldrrs.spec
+
+      - name: Smoke-test the frozen exe
+        shell: pwsh
+        run: |
+          python make_demo_data.py
+          if (-not (Test-Path dist/fieldrrs.exe)) { throw "fieldrrs.exe was not produced" }
+          $len = (Get-Item dist/fieldrrs.exe).Length
+          Write-Host "fieldrrs.exe built, $([math]::Round($len/1MB,1)) MB"
+          if ($len -lt 3MB) { throw "exe is implausibly small, the build is probably incomplete" }
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: fieldrrs-windows-exe
+          path: |
+            dist/fieldrrs.exe
+            FIELD_CARD.pdf
+            FIELD_PROTOCOL.md
+          if-no-files-found: error
