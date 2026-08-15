@@ -235,6 +235,36 @@ def plan_view(ax):
             fontsize=9.2, color=INK, ha="center", va="center")
 
 
+def sky_strip(ax):
+    """The first decision at any station: what sky is it? Everything else follows."""
+    ax.axis("off")
+    ax.set_xlim(0, 10)
+    ax.set_ylim(0, 1)
+    cases = [
+        ("CLEAR / MOSTLY CLEAR", GOOD, "#eaf6ea",
+         "Standard method. 40° / 135° from the sun.\n"
+         "rho = 0.028 only below ~5 m/s (see WIND)."),
+        ("UNIFORM OVERCAST  → GO", "#2c6f9b", "#e8f1f8",
+         "NO SUN GLINT — better than clear in that one way.\n"
+         "rho stable, barely wind-dependent. 135° now meaningless:\n"
+         "keep 40°, pick bearing to clear the boat. NO BRDF. See page 2."),
+        ("BROKEN / PATCHY CLOUD  → STOP", BAD, "#fdecea",
+         "THE WORST CASE, worse than either extreme. E_d changes\n"
+         "between panel and target scan; the error is unbounded and\n"
+         "invisible. Wait for it to settle, or use the E_d sensor (page 2)."),
+    ]
+    w = 3.24
+    for i, (title, col, fc, body) in enumerate(cases):
+        x = 0.12 + i * w
+        ax.add_patch(FancyBboxPatch((x, 0.04), w - 0.16, 0.92,
+                                    boxstyle="round,pad=0.04", fc=fc, ec=col, lw=2.0))
+        ax.text(x + 0.12, 0.80, title, fontsize=10.5, weight="bold", color=col)
+        ax.text(x + 0.12, 0.62, body, fontsize=7.9, color=INK, va="top",
+                linespacing=1.30)
+    ax.text(5.0, 1.02, "FIRST DECISION AT EVERY STATION:  WHAT SKY IS IT?",
+            fontsize=11, weight="bold", color=INK, ha="center")
+
+
 def steps(ax):
     ax.axis("off")
     ax.set_xlim(0, 10)
@@ -283,11 +313,11 @@ def steps(ax):
          "                   whitecaps  INVALID\n\n"
          "→ WHITECAPS APPEARING = the\n"
          "  edge of where ρ = 0.028 holds.\n\n"
-         "Also: wind DIRECTION, a photo,\n"
-         "cloud / sun obscured, panel\n"
-         "reflectance (0.99?), and is the\n"
-         "water clear or turbid?\n"
-         "  turbid → do NOT use nir_zero"),
+         "Also record: wind DIRECTION,\n"
+         "a photo, cloud / sun obscured,\n"
+         "panel reflectance (0.99?), and\n"
+         "clear or turbid water\n"
+         "  turbid → NOT nir_zero"),
         ("CHECK ON THE SPOT", GOOD, "#eaf6ea",
          "⚠ THE CLOCK MAY BE WRONG.\n"
          "  Use GPS Time for solar\n"
@@ -313,18 +343,125 @@ def steps(ax):
                                     boxstyle="round,pad=0.05", fc=fc, ec=col, lw=2.4))
         ax.text(x + (w - 0.16) / 2.0, 2.86, title, fontsize=12.5, weight="bold",
                 color=col, ha="center")
-        ax.text(x + 0.11, 2.58, body, fontsize=8.1, color=INK, va="top", ha="left",
+        ax.text(x + 0.11, 2.60, body, fontsize=7.5, color=INK, va="top", ha="left",
                 linespacing=1.32)
+
+
+def page_two(fig):
+    """Cloudy-weather working, and the products an ABSOLUTE radiometer supports."""
+    gs = fig.add_gridspec(2, 2, hspace=0.13, wspace=0.09,
+                          left=0.035, right=0.975, top=0.90, bottom=0.04)
+
+    panels = [
+        (gs[0, 0], "UNIFORM OVERCAST — what changes", "#2c6f9b", "#e8f1f8",
+         "BETTER than clear sky:\n"
+         "  • NO SUN GLINT. The specular sun beam is the dominant\n"
+         "    error in above-water work. Under thick cloud there is\n"
+         "    no beam, so the hardest thing to avoid goes away.\n"
+         "  • rho is stable and barely wind-dependent. Its wind\n"
+         "    sensitivity comes from wave facets sampling DIFFERENT\n"
+         "    PARTS OF A NON-UNIFORM SKY. Under a uniform sky there\n"
+         "    is little to sample between, so facet tilt stops\n"
+         "    mattering. rho = 0.028 is defensible even in wind that\n"
+         "    would rule it out on a clear day.\n\n"
+         "WORSE:\n"
+         "  • E_d much lower → raise integration time, more replicates\n"
+         "  • No satellite match-up: it cannot see through cloud either\n"
+         "  • DO NOT apply BRDF. The Morel f/Q tables describe a\n"
+         "    clear-sky field with a direct beam; overcast is all\n"
+         "    diffuse and those tables do not describe it.\n\n"
+         "PROTOCOL: 135° azimuth becomes meaningless — no sun to point\n"
+         "away from. KEEP 40° from nadir. Choose the bearing purely to\n"
+         "clear the boat, its shadow and its wake. Record 'overcast':\n"
+         "nothing in the file records the sky state for you."),
+
+        (gs[0, 1], "BROKEN CLOUD — the worst case", BAD, "#fdecea",
+         "Worse than either clear OR fully overcast.\n\n"
+         "The panel method assumes E_d is THE SAME at the moment of\n"
+         "the panel scan and the moment of the target scan. Under\n"
+         "moving cloud it is not, and the error is unbounded and\n"
+         "invisible in the output — nothing in the spectrum tells you\n"
+         "the light changed between scans.\n\n"
+         "OPTIONS, in order:\n"
+         "  1. Wait for the sky to settle, either uniformly clear or\n"
+         "     uniformly overcast.\n"
+         "  2. Use the cosine-collector E_d channel (panel opposite).\n"
+         "     Measuring E_d WITH the target removes the time lag.\n"
+         "  3. If you must proceed: shorten the panel-to-target gap to\n"
+         "     seconds, bracket each target between two panel scans,\n"
+         "     take many replicates, and RECORD that the sky was\n"
+         "     patchy so the data can be down-weighted later.\n\n"
+         "A photograph of the sky at each station settles arguments\n"
+         "later that no number can."),
+
+        (gs[1, 0], "THE E_d SENSOR PATH — use it when light moves", "#8a6000", "#fff6d5",
+         "Fit the COSINE DIFFUSER and take an irradiance scan. DARWin\n"
+         "writes an 'Irr. (Target)' or 'Irr. (Ref.)' column, and the\n"
+         "software uses MEASURED E_d instead of inferring it:\n\n"
+         "    rrs_from_sed(water, sky, source='irradiance')\n\n"
+         "Three error sources drop out at once:\n"
+         "  • the panel-to-target TIME LAG  → the broken-cloud fix\n"
+         "  • the PANEL REFLECTANCE entirely (no 0.99 assumption,\n"
+         "    no certificate, no multiplicative bias)\n"
+         "  • PANEL LEVELNESS — the collector defines the horizontal\n"
+         "    plane itself\n\n"
+         "Conditions: the irradiance channel must be calibrated in\n"
+         "W m⁻² nm⁻¹ consistently with the radiance channel, and the\n"
+         "COLLECTOR MUST BE LEVEL for the same reason the panel was.\n"
+         "Its cosine error behaves better under diffuse light than\n"
+         "under a low direct sun, so overcast is where it is strongest.\n\n"
+         "Verified: recovers a known R_rs to 9 decimals and is exactly\n"
+         "invariant to panel reflectance."),
+
+        (gs[1, 1], "YOU HAVE A SPECTRORADIOMETER — use the absolute scale",
+         GOOD, "#eaf6ea",
+         "Absolute calibration supports products a reflectance-only\n"
+         "instrument cannot give you.\n\n"
+         "PAR — Photosynthetically Available Radiation, from measured\n"
+         "E_d. A PHOTON flux, not an energy flux, because photosynthesis\n"
+         "counts photons:\n\n"
+         "    PAR = ∫(400–700) E_d(λ) · λ / 119.6  dλ\n"
+         "    E_d in W m⁻² nm⁻¹, λ in nm → µmol m⁻² s⁻¹\n\n"
+         "  Full midday sun ≈ 2000 µmol m⁻² s⁻¹. Heavy overcast is one\n"
+         "  to two orders lower. Under cloud that number IS the record\n"
+         "  of how much light the water column actually received.\n\n"
+         "nLw — normalised water-leaving radiance, nLw = R_rs × F₀.\n"
+         "  This is the quantity satellite ocean-colour products are\n"
+         "  distributed in, so it is what makes your field spectrum\n"
+         "  directly comparable with them.\n\n"
+         "Both need the IRRADIANCE channel, not just reflectance.\n"
+         "Take an E_d scan at every station even when the sky is clear."),
+    ]
+
+    for spec, title, col, fc, body in panels:
+        ax = fig.add_subplot(spec)
+        ax.axis("off")
+        ax.set_xlim(0, 1); ax.set_ylim(0, 1)
+        ax.add_patch(FancyBboxPatch((0.005, 0.005), 0.99, 0.99,
+                                    boxstyle="round,pad=0.008", fc=fc, ec=col, lw=2.4,
+                                    transform=ax.transAxes))
+        ax.text(0.5, 0.955, title, fontsize=12.5, weight="bold", color=col,
+                ha="center", transform=ax.transAxes)
+        ax.text(0.03, 0.90, body, fontsize=8.3, color=INK, va="top", ha="left",
+                linespacing=1.34, transform=ax.transAxes)
+
+    fig.suptitle("ABOVE-WATER R$_{rs}$  ·  page 2 — CLOUD, THE E$_d$ SENSOR, "
+                 "AND ABSOLUTE PRODUCTS", fontsize=18, weight="bold", color=INK, y=0.963)
+    fig.text(0.5, 0.925,
+             "Overcast is a usable condition. Broken cloud is not. The irradiance "
+             "channel is what makes the difference.",
+             fontsize=11, color="#444", ha="center")
 
 
 def main():
     fig = plt.figure(figsize=(16.5, 11.7))          # A3 landscape
-    gs = fig.add_gridspec(2, 2, height_ratios=[1.55, 1.10], width_ratios=[1.5, 1.0],
-                          hspace=0.16, wspace=0.10,
+    gs = fig.add_gridspec(3, 2, height_ratios=[1.42, 0.32, 1.26],
+                          width_ratios=[1.5, 1.0], hspace=0.14, wspace=0.10,
                           left=0.03, right=0.985, top=0.905, bottom=0.03)
     side_view(fig.add_subplot(gs[0, 0]))
     plan_view(fig.add_subplot(gs[0, 1]))
-    steps(fig.add_subplot(gs[1, :]))
+    sky_strip(fig.add_subplot(gs[1, :]))
+    steps(fig.add_subplot(gs[2, :]))
 
     fig.suptitle("ABOVE-WATER R$_{rs}$  —  three-scan field method   ·   "
                  "Spectral Evolution NaturaSpec Plus",
@@ -334,11 +471,20 @@ def main():
              "the sun.   Sky scan is the MIRROR of the water scan.",
              fontsize=11, color="#444", ha="center")
 
+    fig2 = plt.figure(figsize=(16.5, 11.7))
+    page_two(fig2)
+
     png = os.path.join(OUT, "FIELD_CARD.png")
+    png2 = os.path.join(OUT, "FIELD_CARD_p2.png")
     pdf = os.path.join(OUT, "FIELD_CARD.pdf")
     fig.savefig(png, dpi=170)
-    fig.savefig(pdf)
-    print("wrote %s\nwrote %s" % (png, pdf))
+    fig2.savefig(png2, dpi=170)
+    from matplotlib.backends.backend_pdf import PdfPages
+    with PdfPages(pdf) as pp:
+        pp.savefig(fig)
+        pp.savefig(fig2)
+    print("wrote %s\nwrote %s\nwrote %s (2 pages — print double-sided)"
+          % (png, png2, pdf))
 
 
 if __name__ == "__main__":

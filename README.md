@@ -3,8 +3,13 @@
 Spectral Evolution `.sed` scans in, remote-sensing reflectance out. Runs on a Windows
 field tablet with **nothing installed but Python**. No pip, no internet, no numpy.
 
-**Print [`FIELD_CARD.pdf`](FIELD_CARD.pdf)** (A3 landscape) and take it with you: side
-view with the angles, plan view with the compass bearings, and the three-step sequence.
+**Print [`FIELD_CARD.pdf`](FIELD_CARD.pdf)** — A3 landscape, **two pages, print
+double-sided**, and take it with you.
+
+*Page 1*: side view with the angles, plan view with the compass bearings, the
+sky-condition decision strip, and the three-step sequence.
+*Page 2*: working under cloud, the E_d sensor path, and the products the absolute
+calibration supports (PAR, nLw).
 Read [`FIELD_PROTOCOL.md`](FIELD_PROTOCOL.md) before collecting data.
 
 Regenerate the card with `python make_field_card.py`. That script is the only thing in
