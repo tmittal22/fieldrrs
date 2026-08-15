@@ -9,7 +9,7 @@ import unittest
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from fieldrrs import (  # noqa: E402
-    RHO_MOBLEY1999, overcast_notes, bin_spectrum, gaussian_resample, read_sed, residual_correction,
+    RHO_MOBLEY1999, overcast_notes, par_from_ed, integrated_irradiance, bin_spectrum, gaussian_resample, read_sed, residual_correction,
     rho_advice, rrs_from_sed, rrs_three_scan, write_batch_csv, write_rrs_csv,
 )
 from fieldrrs.sed import guess_role  # noqa: E402
@@ -573,6 +573,52 @@ class TestOvercastAndMeasuredEd(unittest.TestCase):
         with self.assertRaises(ValueError) as cm:
             rrs_from_sed(read_sed(w), read_sed(s), None, source="nonsense")
         self.assertIn("irradiance", str(cm.exception))
+
+class TestAbsoluteRadiometry(unittest.TestCase):
+    """Products that need a calibrated spectroradiometer, not a reflectance instrument."""
+
+    def test_par_matches_the_closed_form_on_a_rectangular_spectrum(self):
+        """For constant E_d over a narrow band the integral is analytic:
+        PAR = E_d * dlambda * lambda_mid / 119.6. Graded against that, not against
+        another implementation."""
+        wl = [549.0, 550.0, 551.0]
+        ed = [1.0, 1.0, 1.0]
+        par, n = par_from_ed(wl, ed, lo=549.0, hi=551.0)
+        self.assertEqual(n, 3)
+        self.assertAlmostEqual(par, 1.0 * 2.0 * 550.0 / 119.6, places=6)
+
+    def test_par_is_a_photon_flux_so_red_light_counts_more(self):
+        """Equal ENERGY at 650 nm carries more photons than at 450 nm, in the ratio of
+        the wavelengths. This is what makes PAR different from broadband irradiance."""
+        blue = par_from_ed([449.0, 450.0, 451.0], [1.0] * 3, 449.0, 451.0)[0]
+        red = par_from_ed([649.0, 650.0, 651.0], [1.0] * 3, 649.0, 651.0)[0]
+        self.assertAlmostEqual(red / blue, 650.0 / 450.0, places=6)
+
+    def test_par_magnitude_is_physically_sensible(self):
+        """Full midday sun is about 2000 umol/m2/s. A model spectrum carrying ~420 W/m2
+        across 400-700 nm must land near that or the constant is wrong."""
+        wl = [400.0 + i for i in range(301)]
+        ed = [1.5 * math.exp(-((w - 550) ** 2) / (2 * 250.0 ** 2)) for w in wl]
+        par, _ = par_from_ed(wl, ed)
+        self.assertTrue(1500 < par < 2500, par)
+
+    def test_broadband_irradiance_integrates_to_the_rectangle(self):
+        self.assertAlmostEqual(
+            integrated_irradiance([500.0, 600.0], [2.0, 2.0], 500.0, 600.0), 200.0)
+
+    def test_par_refuses_when_the_irradiance_channel_is_absent(self):
+        with self.assertRaises(ValueError) as cm:
+            par_from_ed([400.0], [1.0])
+        self.assertIn("irradiance channel", str(cm.exception))
+
+    def test_par_ignores_bands_outside_the_window(self):
+        wl = [300.0, 500.0, 600.0, 900.0]
+        ed = [99.0, 2.0, 2.0, 99.0]
+        par, n = par_from_ed(wl, ed)
+        self.assertEqual(n, 2)
+        self.assertAlmostEqual(par, integrated_irradiance(wl, ed) * 550.0 / 119.6,
+                               places=3)
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

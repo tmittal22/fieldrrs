@@ -21,7 +21,7 @@ import math
 __all__ = [
     "RHO_MOBLEY1999", "SIMILARITY_780_870", "RrsResult",
     "rrs_three_scan", "rrs_from_sed", "residual_correction", "rho_advice",
-    "overcast_notes",
+    "overcast_notes", "par_from_ed", "integrated_irradiance",
 ]
 
 #: Mobley (1999) effective sea-surface radiance reflectance for the recommended
@@ -381,3 +381,55 @@ def average_results(results):
                      "calibration are systematic and are not captured here."])
     out.sd = sd
     return out
+
+
+# ----------------------------------------------------------------------------------
+# Products that need an ABSOLUTE radiometer, not just a reflectance instrument.
+
+#: Energy of one mole of photons at wavelength lambda [nm] is 1.196e8 / lambda J/mol,
+#: from N_A h c = 0.1196 J m /mol. Dividing an irradiance in W m^-2 nm^-1 by that and
+#: scaling to micromoles gives the constant below.
+_PHOTON_CONST = 119.6
+
+
+def par_from_ed(wavelength, ed, lo=400.0, hi=700.0):
+    """Photosynthetically Available Radiation from a measured E_d spectrum.
+
+    PAR is a PHOTON flux, not an energy flux, because photosynthesis counts photons:
+
+        PAR [umol photons m^-2 s^-1] = integral(400..700) E_d(l) * l / 119.6  dl
+
+    with E_d in W m^-2 nm^-1 and l in nm. The constant is N_A h c = 0.1196 J m /mol
+    expressed for nanometres and micromoles; nothing here is fitted or tabulated.
+
+    This is a product a reflectance-only instrument cannot give you. It needs an
+    absolutely calibrated irradiance channel, which is what a spectroradiometer with a
+    cosine collector is. Full midday sunlight is around 2000 umol m^-2 s^-1; heavy
+    overcast is one to two orders of magnitude lower, and measuring that drop is a
+    direct record of how much light the water column actually received.
+
+    Returns (PAR, n_bands_used). Trapezoidal integration on the instrument's own grid.
+    """
+    pts = [(w, e) for w, e in zip(wavelength, ed)
+           if lo <= w <= hi and e == e and e >= 0.0]
+    if len(pts) < 2:
+        raise ValueError(
+            "PAR needs at least two finite E_d samples in %.0f-%.0f nm; got %d. Was the "
+            "irradiance channel recorded?" % (lo, hi, len(pts)))
+    total = 0.0
+    for (w0, e0), (w1, e1) in zip(pts[:-1], pts[1:]):
+        f0 = e0 * w0 / _PHOTON_CONST
+        f1 = e1 * w1 / _PHOTON_CONST
+        total += 0.5 * (f0 + f1) * (w1 - w0)
+    return total, len(pts)
+
+
+def integrated_irradiance(wavelength, ed, lo=400.0, hi=700.0):
+    """Broadband E_d over a window, W m^-2. The energy counterpart of PAR."""
+    pts = [(w, e) for w, e in zip(wavelength, ed)
+           if lo <= w <= hi and e == e and e >= 0.0]
+    if len(pts) < 2:
+        raise ValueError("need at least two finite E_d samples in %.0f-%.0f nm"
+                         % (lo, hi))
+    return sum(0.5 * (e0 + e1) * (w1 - w0)
+               for (w0, e0), (w1, e1) in zip(pts[:-1], pts[1:]))
