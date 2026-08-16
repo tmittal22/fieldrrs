@@ -262,6 +262,22 @@ def rrs_from_sed(water, sky, panel=None,
     ``source='reflectance'`` falls back to the ``Reflect.`` ratio columns, valid only
     when every scan shares one reference panel, since the panel radiance then cancels.
     """
+    # The sky scan is the ONE mandatory extra input, so it gets an explicit refusal.
+    # Without it, rho*L_sky is never subtracted and R_rs comes out far too high in the
+    # blue -- a wrong answer that looks like a plausible spectrum. The GUI blocks this
+    # earlier with its own message; this is for anyone driving the library directly, who
+    # otherwise got AttributeError on NoneType and no idea why.
+    if water is None:
+        raise ValueError("rrs_from_sed needs a WATER scan.")
+    if sky is None:
+        raise ValueError(
+            "rrs_from_sed needs a SKY scan, and it is not optional. Without it the "
+            "reflected skylight rho*L_sky stays in the signal and R_rs comes out far "
+            "too high in the blue. It is the 40-deg-from-ZENITH scan on the SAME "
+            "compass bearing as the water scan. (The PANEL, by contrast, IS optional: "
+            "omit it and the panel radiance is read from the water file's own "
+            "'Rad. (Ref.)' column.)")
+
     wl = water.wavelength
     if list(sky.wavelength) != list(wl):
         raise ValueError(

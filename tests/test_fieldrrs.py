@@ -926,5 +926,78 @@ class TestSolarWindow(unittest.TestCase):
                                     "not-failed")
 
 
+class TestWhatIsActuallyRequired(unittest.TestCase):
+    """Which inputs are mandatory. Field-critical: it decides what you must carry."""
+
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp()
+        w, s, p, _ = synthetic_station(self.tmp, clear_water)
+        self.W, self.S, self.P = read_sed(w), read_sed(s), read_sed(p)
+
+    def test_panel_file_is_optional_and_changes_nothing(self):
+        """Omitting it falls back to the water file's own Rad. (Ref.) column, which is
+        the DARWin two-file workflow. Must be BITWISE identical, not merely close."""
+        a = rrs_from_sed(self.W, self.S, self.P)
+        b = rrs_from_sed(self.W, self.S, None)
+        self.assertEqual(list(a.rrs), list(b.rrs))
+
+    def test_sky_scan_is_refused_with_a_readable_reason(self):
+        """The one mandatory extra input. Without the guard this raised AttributeError
+        on NoneType, which tells a scripting user nothing."""
+        with self.assertRaises(ValueError) as cm:
+            rrs_from_sed(self.W, None, self.P)
+        msg = str(cm.exception)
+        self.assertIn("SKY", msg)
+        self.assertIn("not optional", msg)
+        self.assertIn("ZENITH", msg)
+
+    def test_the_sky_refusal_says_the_panel_is_optional(self):
+        """The two are constantly confused; the message that fires should say which is
+        which rather than leave the user guessing that the panel is required too."""
+        with self.assertRaises(ValueError) as cm:
+            rrs_from_sed(self.W, None, self.P)
+        self.assertIn("PANEL", str(cm.exception))
+        self.assertIn("optional", str(cm.exception))
+
+    def test_dropping_the_sky_would_inflate_the_blue(self):
+        """Justifies the refusal rather than asserting it: skipping rho*L_sky leaves a
+        large positive bias, worst in the blue, that still looks like a real spectrum."""
+        good = rrs_from_sed(self.W, self.S, self.P)
+        naive = [lt / ed for lt, ed in
+                 zip(self.W.radiance_target,
+                     [math.pi * lp / 0.99 for lp in self.P.radiance_target])]
+        i443 = min(range(len(WL)), key=lambda j: abs(WL[j] - 443))
+        i800 = min(range(len(WL)), key=lambda j: abs(WL[j] - 800))
+        blue = naive[i443] - good.rrs[i443]
+        red = naive[i800] - good.rrs[i800]
+        self.assertGreater(blue, 0.0)
+        self.assertGreater(blue, red)
+
+    def test_the_package_needs_nothing_beyond_the_standard_library(self):
+        """The reason it can be a single exe, and the reason no external inversion
+        package is required to produce R_rs."""
+        import ast
+        import os as _os
+        mods = set()
+        root = _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__)))
+        pkg = _os.path.join(root, "fieldrrs")
+        for r, _d, fs in _os.walk(pkg):
+            for f in fs:
+                if not f.endswith(".py"):
+                    continue
+                tree = ast.parse(open(_os.path.join(r, f)).read())
+                for n in ast.walk(tree):
+                    if isinstance(n, ast.Import):
+                        mods.update(a.name.split(".")[0] for a in n.names)
+                    elif isinstance(n, ast.ImportFrom) and n.level == 0 and n.module:
+                        mods.add(n.module.split(".")[0])
+        allowed = {"__future__", "csv", "datetime", "math", "os", "re", "tkinter",
+                   "traceback"}
+        self.assertEqual(mods - allowed, set(),
+                         "fieldrrs grew a dependency: %s" % (mods - allowed))
+        for banned in ("numpy", "scipy", "giop", "matplotlib", "pandas"):
+            self.assertNotIn(banned, mods)
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)
