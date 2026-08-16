@@ -19,8 +19,10 @@ from .rrs import (
     DEFAULT_PANEL_REFLECTANCE,
     RHO_MOBLEY1999,
     average_results,
+    cross_calibration_factor,
     rho_advice,
     rrs_from_sed,
+    rrs_from_separate_ed,
 )
 from .sed import guess_role, read_folder, read_sed
 from .solar import (
@@ -37,9 +39,9 @@ BIGB = ("Segoe UI", 12, "bold")
 HUGE = ("Segoe UI", 14, "bold")
 MONO = ("Consolas", 10)
 
-ROLES = ("water", "sky", "panel", "skip")
-ROLE_COLOR = {"water": "#0b6", "sky": "#08c", "panel": "#c60", "skip": "#999",
-              "unassigned": "#333"}
+ROLES = ("water", "sky", "panel", "ed", "skip")
+ROLE_COLOR = {"water": "#0b6", "sky": "#08c", "panel": "#c60", "ed": "#6a3d9a",
+              "skip": "#999", "unassigned": "#333"}
 
 
 class App(tk.Tk):
@@ -67,14 +69,15 @@ class App(tk.Tk):
         right.pack(side=tk.RIGHT, fill=tk.BOTH, expand=True)
 
         # --- step 1a: the three scans, loaded explicitly one at a time
-        ttk.Label(left, text="1.  LOAD THE THREE SCANS", font=HUGE).pack(anchor="w")
+        ttk.Label(left, text="1.  LOAD THE SCANS", font=HUGE).pack(anchor="w")
         slots = ttk.Frame(left)
         slots.pack(fill=tk.X, pady=(2, 4))
         self.slot_labels = {}
         for i, (role, hint) in enumerate((
                 ("water", "40 deg from NADIR, 135 deg from sun"),
                 ("sky", "40 deg from ZENITH, same bearing as water"),
-                ("panel", "level white panel  (optional)"))):
+                ("panel", "level white panel  (optional)"),
+                ("ed", "SEPARATE irradiance sensor  (optional)"))):
             tk.Button(slots, text="LOAD %s" % role.upper(), font=BIGB, width=12, height=2,
                       bg=ROLE_COLOR[role], fg="white",
                       command=lambda r=role: self.load_slot(r)).grid(
@@ -85,12 +88,16 @@ class App(tk.Tk):
             self.slot_labels[role] = lab
             tk.Label(slots, text=hint, font=("Segoe UI", 8), fg="#555",
                      anchor="w").grid(row=i, column=2, sticky="w", padx=(8, 0))
-        tk.Button(slots, text="clear all three", font=("Segoe UI", 9),
-                  command=self.clear_slots).grid(row=3, column=0, columnspan=2,
+        tk.Button(slots, text="clear all slots", font=("Segoe UI", 9),
+                  command=self.clear_slots).grid(row=4, column=0, columnspan=2,
                                                  sticky="w", pady=(2, 0))
-        ttk.Label(left, text="PANEL is optional: leave it empty and the panel radiance "
-                             "is read from the water file's own Rad. (Ref.) column\n"
-                             "(the DARWin reference-scan workflow).",
+        ttk.Label(left, text="PANEL optional: leave it empty and the panel radiance is "
+                             "read from the water file's own Rad. (Ref.) column\n"
+                             "(the DARWin reference-scan workflow).\n"
+                             "E_d optional: load it and R_rs is computed from the "
+                             "MEASURED irradiance instead of the panel. Load BOTH\n"
+                             "and the two instruments are cross-calibrated against each "
+                             "other and the verdict is printed.",
                   font=("Segoe UI", 8), foreground="#444").pack(anchor="w")
 
         ttk.Separator(left).pack(fill=tk.X, pady=6)
@@ -472,6 +479,7 @@ class App(tk.Tk):
                     "SAME compass bearing as your water view.")
             sky = skies[0]
             panel = panels[0] if panels else None
+            ed_scan = self.slots.get("ed") or (self._picked("ed")[:1] or [None])[0]
             self.say("Computing from: %s" % mode)
             if panel is None and self.source.get() == "radiance":
                 self.say("No panel scan assigned; using the water file's own "
@@ -486,11 +494,24 @@ class App(tk.Tk):
             self.results = []
             self.log.delete("1.0", tk.END)
             geom = self._geometry_meta()
+            cal = None
+            if ed_scan is not None:
+                self.say("SETUP B: separate irradiance sensor loaded (%s)."
+                         % ed_scan.name)
+                self.say("   E_d is measured, NOT inferred from the panel. The panel "
+                         "reflectance no longer enters R_rs.")
+                cal = self._cross_calibrate(ed_scan, panel, waters[0], pr)
+
             for w in waters:
-                res = rrs_from_sed(w, sky, panel, panel_reflectance=pr, rho=rho,
-                                   residual=resid, source=src)
+                if ed_scan is not None:
+                    res = self._rrs_with_measured_ed(w, sky, ed_scan, rho, resid, cal)
+                else:
+                    res = rrs_from_sed(w, sky, panel, panel_reflectance=pr, rho=rho,
+                                       residual=resid, source=src)
                 res.meta.update(geom)
                 res.meta["panel_reflectance"] = pr
+                res.meta["ed_source"] = ("measured (separate instrument)"
+                                         if ed_scan is not None else "panel-inferred")
                 self.results.append((os.path.splitext(w.name)[0], res))
                 self.say("--- %s" % w.name)
                 for n in res.notes:
@@ -512,6 +533,70 @@ class App(tk.Tk):
             self.say("Done. %d spectra. Check the warnings above." % len(self.results))
         except Exception as exc:
             self._err(exc)
+
+    # ---------------------------------------------------------------- setup B
+    def _ed_arrays(self, ed_scan):
+        """Pull (wavelength, E_d) out of an irradiance scan.
+
+        A separate irradiance instrument writes an irradiance column, but a .sed exported
+        from a radiance instrument aimed at the sky does not. Refusing here with a
+        readable message beats dividing R_rs by a radiance and shipping a number that is
+        wrong by a factor of pi.
+        """
+        for key in ("irr_target", "irr_ref", "rad_target"):
+            col = ed_scan.columns.get(key)
+            if col is not None:
+                if key == "rad_target":
+                    self.say("   ! %s has no irradiance column; using Rad. (Target). "
+                             "Check this is really an irradiance file."
+                             % ed_scan.name)
+                return list(ed_scan.wavelength), list(col)
+        raise ValueError(
+            "%s carries no irradiance column (looked for 'Irr. (Target)', "
+            "'Irr. (Ref.)'). Export the irradiance sensor's file with its irradiance "
+            "channel, or leave the E_d slot empty to use the panel route."
+            % ed_scan.name)
+
+    def _cross_calibrate(self, ed_scan, panel, water, panel_r):
+        """Compare the two instruments through the panel. THEORY.pdf p2, eq (F4)."""
+        l_panel = None
+        if panel is not None:
+            l_panel = panel.columns.get("rad_target") or panel.columns.get("rad_ref")
+            wl_p = panel.wavelength
+        elif water.columns.get("rad_ref") is not None:
+            l_panel, wl_p = water.columns["rad_ref"], water.wavelength
+            self.say("   Cross-calibrating against the water file's own Rad. (Ref.) "
+                     "column.")
+        if l_panel is None:
+            self.say("   ! No panel scan loaded, so the two instruments CANNOT be "
+                     "cross-calibrated. R_rs carries their COMBINED absolute "
+                     "calibration uncertainty as a multiplicative bias.")
+            return None
+        try:
+            ed_wl, ed = self._ed_arrays(ed_scan)
+            c = cross_calibration_factor(list(wl_p), list(l_panel), ed, ed_wl,
+                                         panel_reflectance=panel_r)
+        except Exception as exc:
+            self.say("   ! Cross-calibration failed: %s" % exc)
+            return None
+        self.say("   CROSS-CALIBRATION  mean C = %.3f   spread %.1f %%   (%d bands)"
+                 % (c["mean"], 100.0 * c["spread"], c["n_bands"]))
+        self.say("   %s" % c["verdict"])
+        return c
+
+    def _rrs_with_measured_ed(self, water, sky, ed_scan, rho, resid, cal):
+        l_t = water.columns.get("rad_target")
+        l_s = sky.columns.get("rad_target")
+        if l_t is None or l_s is None:
+            raise ValueError(
+                "Setup B needs RADIANCE columns in the water and sky files "
+                "('Rad. (Target)'). Found water=%s sky=%s."
+                % (sorted(water.columns), sorted(sky.columns)))
+        ed_wl, ed = self._ed_arrays(ed_scan)
+        # The factor is REPORTED but not applied: multiplying it back in re-introduces
+        # the panel reflectance that a measured E_d exists to remove. THEORY.pdf p2.
+        return rrs_from_separate_ed(list(water.wavelength), list(l_t), list(l_s),
+                                    ed, ed_wl, rho=rho, residual=resid)
 
     def _geometry_meta(self):
         """Everything about how the measurement was aimed, written into every CSV.

@@ -753,5 +753,105 @@ class TestTwoInstrumentSetup(unittest.TestCase):
         self.assertIn("ed_wavelength", str(cm.exception))
 
 
+class _Scan(object):
+    """Stand-in for SedSpectrum: the GUI helpers only touch these three attributes."""
+
+    def __init__(self, wl, cols, name):
+        self.wavelength, self.columns, self.name = wl, cols, name
+
+
+class TestGuiSetupB(unittest.TestCase):
+    """The GUI's SEPARATE-irradiance path.
+
+    The library functions being correct does not mean the exe uses them; until this
+    session the GUI had only water/sky/panel slots and could ONLY do setup A. These
+    drive the real App methods unbound, with no Tk mainloop.
+    """
+
+    RWL = [350.0 + i for i in range(651)]
+    EWL = [400.0 + 3.3 * i for i in range(152)]
+
+    def setUp(self):
+        try:
+            from fieldrrs.gui import App
+        except Exception as exc:                      # headless CI without tkinter
+            raise unittest.SkipTest("gui unavailable: %s" % exc)
+        self.App = App
+        self.msgs = []
+        self.app = App.__new__(App)
+        self.app.say = self.msgs.append
+
+    @staticmethod
+    def _ed(w):
+        return 1.1 * math.exp(-((w - 550) ** 2) / (2 * 300.0 ** 2)) + 0.2
+
+    def _scans(self, gain=1.0):
+        panel = [self._ed(w) * 0.99 / math.pi for w in self.RWL]
+        sky = [0.02 * self._ed(w) / math.pi for w in self.RWL]
+        water = [clear_water(w) * self._ed(w) + RHO_MOBLEY1999 * s
+                 for w, s in zip(self.RWL, sky)]
+        return (_Scan(self.RWL, {"rad_target": water, "rad_ref": panel}, "water.sed"),
+                _Scan(self.RWL, {"rad_target": sky}, "sky.sed"),
+                _Scan(self.RWL, {"rad_target": panel}, "panel.sed"),
+                _Scan(self.EWL, {"irr_target": [self._ed(w) * gain for w in self.EWL]},
+                      "ed.sed"))
+
+    def test_measured_ed_path_recovers_the_known_rrs(self):
+        w, s, p, e = self._scans()
+        res = self.App._rrs_with_measured_ed(self.app, w, s, e, RHO_MOBLEY1999,
+                                             "none", None)
+        i = min(range(len(self.RWL)), key=lambda j: abs(self.RWL[j] - 443))
+        self.assertAlmostEqual(res.rrs[i], clear_water(443.0), places=5)
+
+    def test_cross_calibration_reports_a_gain_offset(self):
+        w, s, p, e = self._scans(gain=1.06)
+        c = self.App._cross_calibrate(self.app, e, p, w, 0.99)
+        self.assertAlmostEqual(c["mean"], 1.0 / 1.06, places=3)
+        self.assertTrue(any("CROSS-CALIBRATION" in m for m in self.msgs))
+
+    def test_a_gain_offset_biases_rrs_and_the_gui_says_so(self):
+        """The bias is real, and the operator is told about it rather than left to
+        discover it in post-processing."""
+        w, s, p, e = self._scans(gain=1.06)
+        self.App._cross_calibrate(self.app, e, p, w, 0.99)
+        res = self.App._rrs_with_measured_ed(self.app, w, s, e, RHO_MOBLEY1999,
+                                             "none", None)
+        i = min(range(len(self.RWL)), key=lambda j: abs(self.RWL[j] - 443))
+        self.assertAlmostEqual(res.rrs[i] / clear_water(443.0), 1.0 / 1.06, places=4)
+        self.assertTrue(any("-5.7" in m or "5.7 %" in m for m in self.msgs), self.msgs)
+
+    def test_no_panel_means_no_cross_calibration_and_a_warning(self):
+        """Without a panel the two instruments cannot be tied together at all; that
+        must be stated, not silently skipped."""
+        w, s, p, e = self._scans()
+        w.columns.pop("rad_ref")
+        self.assertIsNone(self.App._cross_calibrate(self.app, e, None, w, 0.99))
+        self.assertTrue(any("COMBINED absolute" in m for m in self.msgs), self.msgs)
+
+    def test_a_file_with_no_irradiance_column_is_refused(self):
+        """Dividing R_rs by a RADIANCE would be wrong by a factor of pi and would look
+        entirely plausible, so this must raise rather than warn."""
+        w, s, p, e = self._scans()
+        bad = _Scan(self.EWL, {"reflectance": [0.5] * len(self.EWL)}, "notirr.sed")
+        with self.assertRaises(ValueError) as cm:
+            self.App._ed_arrays(self.app, bad)
+        self.assertIn("no irradiance column", str(cm.exception))
+
+    def test_radiance_columns_are_required_for_setup_b(self):
+        w, s, p, e = self._scans()
+        s.columns.pop("rad_target")
+        with self.assertRaises(ValueError) as cm:
+            self.App._rrs_with_measured_ed(self.app, w, s, e, RHO_MOBLEY1999, "none",
+                                           None)
+        self.assertIn("RADIANCE", str(cm.exception))
+
+    def test_the_ed_slot_exists_in_the_gui(self):
+        """Guards the regression this whole class exists for: the exe shipped for weeks
+        with three slots and no way to load a measured E_d."""
+        from fieldrrs.gui import ROLES, ROLE_COLOR
+        self.assertIn("ed", ROLES)
+        self.assertIn("ed", ROLE_COLOR)
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

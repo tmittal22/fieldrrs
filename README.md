@@ -3,6 +3,51 @@
 Spectral Evolution `.sed` scans in, remote-sensing reflectance out. Runs on a Windows
 field tablet with **nothing installed but Python**. No pip, no internet, no numpy.
 
+## What this does, in one table
+
+Which instruments you carry decides which path runs. The exe supports **both**, and picks
+by whether you loaded an E_d file. Full derivation in **[`THEORY.pdf`](THEORY.pdf)**.
+
+| | **A · NaturaSpec Plus alone** | **B · + separate irradiance sensor** |
+|---|---|---|
+| scans | panel, sky, water (one at a time) | sky, water + **simultaneous E_d** |
+| E_d comes from | the **panel**, via `E_d = π L_p / R_p` | **measured directly** |
+| panel needed? | **yes — it IS the irradiance** | no — but load it anyway, see below |
+| you get | R_rs | R_rs, **PAR**, atmospheric transmittance, E_d-stability check |
+| you carry | panel reflectance, panel levelness, **panel-to-target time lag**, ρ | **inter-instrument calibration**, ρ |
+| broken cloud | disqualifying (light moves between scans) | **workable** — E_d is simultaneous |
+| in the GUI | load 3 slots | load 4 slots; the E_d slot switches the physics |
+
+**The trade is not free.** Setup B removes the panel and the time lag, but R_rs now divides
+a radiance from instrument A by an irradiance from instrument B, so **any offset between
+their absolute calibrations is a direct multiplicative bias on every R_rs**. Measured: a
+6 % gain offset moves R_rs(443) by **−5.7 %**, uniformly and silently.
+
+**So load the panel in setup B too.** It stops being the E_d source and becomes the
+**transfer standard** that ties the two instruments together:
+
+```
+C(λ) = [π·L_panel(λ)/R_panel(λ)] / E_d_measured(λ)          (F4)
+```
+
+Load panel *and* E_d and the GUI prints the verdict automatically:
+
+```
+CROSS-CALIBRATION  mean C = 0.943   spread 0.0 %   (301 bands)
+The two instruments differ by -5.7 % (mean C = 0.943) but the disagreement is
+spectrally flat, so it behaves like a gain offset. Decide which absolute scale
+you trust before correcting; applying C re-introduces the panel reflectance you
+were trying to avoid.
+```
+
+A **flat** disagreement is a gain offset. A **spectrally structured** one is not a gain at
+all and points at a stale calibration, a tilted collector or a shaded panel. C is
+**reported, never applied automatically** — multiplying it back in re-introduces the panel
+reflectance setup B existed to remove. Run it **once per deployment**, and again after
+anything gets knocked.
+
+---
+
 **Print [`FIELD_CARD.pdf`](FIELD_CARD.pdf)** — A3 landscape, **two pages, print
 double-sided**, and take it with you.
 
@@ -10,11 +55,16 @@ double-sided**, and take it with you.
 sky-condition decision strip, and the three-step sequence.
 *Page 2*: working under cloud, the E_d sensor path, and the products the absolute
 calibration supports (PAR, nLw).
+
+**Read [`THEORY.pdf`](THEORY.pdf)** (5 pages, A3) for the physics behind all of it:
+the three governing equations and why ρ is not a Fresnel coefficient; the A-vs-B
+capability chart above with its error budget; every cross-check and what each one can
+and cannot catch; and the products an absolute irradiance channel supports.
 Read [`FIELD_PROTOCOL.md`](FIELD_PROTOCOL.md) before collecting data.
 
-Regenerate the card with `python make_field_card.py`. That script is the only thing in
-the repository that needs matplotlib; the field package itself stays pure standard
-library.
+Regenerate with `python make_field_card.py` and `python make_theory_pdf.py`. Those two
+scripts are the only things in the repository that need matplotlib; the field package
+itself stays pure standard library.
 
 ---
 
@@ -63,12 +113,20 @@ blue-peaking spectrum with R_rs(443) near 0.0029 sr^-1 and no warnings.
 
 ## Using it
 
-**Single station.** Three buttons at the top, one per scan:
+**Single station.** Four buttons at the top, one per scan:
 
 - **LOAD WATER** — the 40°-from-nadir, 135°-from-sun scan
 - **LOAD SKY** — the 40°-from-zenith scan on the same bearing
 - **LOAD PANEL** — *optional*. Leave it empty and the panel radiance is read from the
   water file's own `Rad. (Ref.)` column, which is the DARWin reference-scan workflow.
+- **LOAD ED** — *optional*, and it is the **setup A / setup B switch**. Leave it empty
+  and E_d comes from the panel (setup A). Load it and E_d is the measured irradiance
+  (setup B), the panel drops out of R_rs entirely, and — if a panel is also loaded — the
+  two instruments are cross-calibrated and the verdict printed. The file needs a real
+  irradiance column (`Irr. (Target)` / `Irr. (Ref.)`); a radiance file is **refused**
+  rather than silently used, because that error is a clean factor of π and looks
+  entirely plausible in the output. The irradiance sensor may be on its own wavelength
+  grid; it is interpolated, and radiance bands outside its range are reported.
 
 Each slot shows the loaded filename, band count and wavelength range, and turns green.
 If the filename or DARWin Comment disagrees with the slot you are loading it into (a file
