@@ -5,12 +5,13 @@
 Development script; the only things in this repository needing matplotlib are this and
 make_field_card.py. The field package itself stays pure standard library.
 
-Five pages:
+Six pages:
   1  the measurement problem and the governing equations
   2  WHAT YOU HAVE decides WHAT YOU GET  (the capability chart)
   3  the error budget, quantified
   4  two instruments, and how to cross-check them
   5  derived products the absolute scale supports
+  6  WHERE THE SUN HAS TO BE -- the window, computed rather than adopted
 """
 
 import math
@@ -78,7 +79,7 @@ class Flow:
 def header(fig, n, title, subtitle):
     fig.text(0.5, 0.965, title, fontsize=19, weight="bold", ha="center", color=INK)
     fig.text(0.5, 0.945, subtitle, fontsize=10.5, ha="center", color="#555")
-    fig.text(0.955, 0.012, "page %d of 5" % n, fontsize=8.5, ha="right", color="#888")
+    fig.text(0.955, 0.012, "page %d of 6" % n, fontsize=8.5, ha="right", color="#888")
     fig.text(0.045, 0.012, "fieldrrs — above-water R$_{rs}$ theory", fontsize=8.5,
              color="#888")
 
@@ -511,17 +512,96 @@ def page5():
     return fig
 
 
+# ---------------------------------------------------------------- page 6
+def page6():
+    """Where the sun has to be. The figure is COMPUTED by analysis_solar_window.py;
+    this page embeds that output rather than redrawing a cartoon of it."""
+    import analysis_solar_window as sw
+
+    fig = plt.figure(figsize=PAGE)
+    header(fig, 6, "6 \u00b7 WHERE THE SUN HAS TO BE",
+           "The window, computed rather than adopted")
+    ax = overlay(fig)
+
+    ax.text(0.5, 0.905,
+            "PREFERRED:  solar elevation  30\u00b0 \u2013 60\u00b0  above the horizon",
+            fontsize=17, weight="bold", color=GOOD, ha="center", va="top")
+    ax.text(0.5, 0.878,
+            "which is ALSO solar zenith 30\u00b0\u201360\u00b0 \u2014 the window is "
+            "symmetric about 45\u00b0, so it is correct whichever convention you mean.",
+            fontsize=10.5, color=INK, ha="center", va="top")
+    ax.text(0.5, 0.858,
+            "USABLE 20\u00b0\u201370\u00b0. Nothing fails outside 30\u201360; "
+            "\u03c1 = 0.028 is simply less well determined.",
+            fontsize=9.5, color="#555", ha="center", va="top")
+
+    # the computed figure
+    im = fig.add_axes([0.045, 0.620, 0.91, 0.208])
+    im.imshow(plt.imread(os.path.join(OUT, "figures_solar_window.png")))
+    im.axis("off")
+
+    box(ax, 0.045, 0.395, 0.44, 0.205,
+        "TOP end \u2014 GLINT, and it is the surprise", BAD, "#fdecea",
+        "A facet puts the sun in the field of view when its\n"
+        "normal bisects the sun and view directions. That\n"
+        "tilt is MINIMISED at ~66\u00b0 elevation, at only 15.2\u00b0.\n\n"
+        "Under Cox & Munk (1954) slope statistics\n"
+        "(\u03c3\u00b2 = 0.003 + 0.00512 W) such facets sit 1.6 \u03c3\n"
+        "from the mean at 5 m/s \u2014 COMMON.\n\n"
+        "60\u00b0 \u2192 30\u00b0 elevation raises the required tilt\n"
+        "15.6\u00b0 \u2192 25.8\u00b0 and cuts the glint weight 15\u00d7\n"
+        "(0.254 \u2192 0.017).\n\n"
+        "HIGH SUN IS THE GLINT PROBLEM, NOT LOW SUN.\n"
+        "Midday is the worst time, not the best.", bsize=8.4)
+
+    box(ax, 0.515, 0.395, 0.44, 0.205,
+        "BOTTOM end \u2014 SIGNAL", "#8a6000", "#fff6d5",
+        "E_d on the horizontal goes as sin(elevation):\n\n"
+        "      elevation 60\u00b0    \u2192   87 % of overhead\n"
+        "      elevation 30\u00b0    \u2192   50 %\n"
+        "      elevation 20\u00b0    \u2192   34 %\n"
+        "      elevation 10\u00b0    \u2192   17 %\n\n"
+        "and the airmass roughly doubles from 30\u00b0 to 20\u00b0,\n"
+        "so the direct beam is attenuated further and the\n"
+        "field grows more DIFFUSE \u2014 which also makes the\n"
+        "sky scan harder to match to what the surface\n"
+        "actually reflected.", bsize=8.4)
+
+    box(ax, 0.045, 0.215, 0.91, 0.155,
+        "NOT a constraint, though everyone assumes it is: YOUR OWN SHADOW", GOOD,
+        "#eaf6ea",
+        "Reach is the wrong test. The shadow runs along the ANTI-SOLAR bearing while the "
+        "target sits 45\u00b0 off it at\n135\u00b0 relative azimuth, so the miss "
+        "distance is a FIXED LATERAL 1.74 m at 3.8 m range \u2014 independent of solar\n"
+        "elevation. At 10\u00b0 elevation a 2 m operator throws an 11.3 m shadow and it "
+        "STILL misses the spot by 1.74 m.\n\n"
+        "A person never shadows the footprint here. A BOAT or a PIER is a much larger "
+        "object and can, which is exactly\nthe IOCCG argument for a 90\u00b0 relative "
+        "azimuth instead \u2014 there the clearance is 2.47 m and the target is well "
+        "to the side of the structure.", tsize=11, bsize=8.5)
+
+    ax.text(0.5, 0.172,
+            "In practice: the good hours are MID-MORNING and MID-AFTERNOON, not noon.\n"
+            "Press WHERE IS THE SUN? in the GUI \u2014 it prints the elevation, the "
+            "tier, and which of the two limits you are near.",
+            fontsize=10.5, ha="center", color=INK, weight="bold", va="top")
+    ax.text(0.5, 0.125,
+            "Reproduce every number on this page:  python analysis_solar_window.py",
+            fontsize=8.5, ha="center", color="#888", va="top")
+    return fig
+
+
 def main():
     pdf = os.path.join(OUT, "THEORY.pdf")
-    figs = [page1(), page2(), page3(), page4(), page5()]
+    figs = [page1(), page2(), page3(), page4(), page5(), page6()]
     with PdfPages(pdf) as pp:
         for f in figs:
             pp.savefig(f)
     for i, f in enumerate(figs, 1):
         f.savefig(os.path.join(OUT, "theory_p%d.png" % i), dpi=110)
         plt.close(f)
-    print("wrote %s  (5 pages)" % pdf)
-    print("wrote theory_p1..p5.png")
+    print("wrote %s  (6 pages)" % pdf)
+    print("wrote theory_p1..p6.png")
 
 
 if __name__ == "__main__":

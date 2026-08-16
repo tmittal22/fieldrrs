@@ -28,7 +28,8 @@ from fieldrrs import (  # noqa: E402
 )
 from fieldrrs.sed import guess_role  # noqa: E402
 from fieldrrs.solar import (  # noqa: E402
-    ALT_RELATIVE_AZIMUTH, compass_point, declination_from_sun_sighting,
+    ALT_RELATIVE_AZIMUTH, SOLAR_ELEVATION_PREFERRED, SOLAR_ELEVATION_USABLE,
+    SOLAR_ZENITH_MAX, SOLAR_ZENITH_MIN, SolarPosition, solar_window_verdict, compass_point, declination_from_sun_sighting,
     local_to_utc_hours, magnetic_from_true, pointing, solar_position,
     true_from_magnetic,
 )
@@ -436,7 +437,7 @@ class TestSolarPosition(unittest.TestCase):
     def test_sun_below_horizon_is_reported(self):
         sp = solar_position(self.LAT, self.LON, 2026, 8, 15, 5.0)   # ~01:00 local
         self.assertLess(sp.elevation, 0)
-        self.assertIn("below the horizon", sp.advice())
+        self.assertIn("below the horizon", sp.advice().lower())
 
     def test_pointing_gives_two_bearings_135_either_side(self):
         p = pointing(self.LAT, self.LON, 2026, 8, 15, 16.0)
@@ -851,6 +852,78 @@ class TestGuiSetupB(unittest.TestCase):
         from fieldrrs.gui import ROLES, ROLE_COLOR
         self.assertIn("ed", ROLES)
         self.assertIn("ed", ROLE_COLOR)
+
+
+class TestSolarWindow(unittest.TestCase):
+    """The 30-60 deg window, and the geometry that sets both ends.
+
+    Graded against the physics in analysis_solar_window.py, not against the constants,
+    so moving a constant to a wrong value fails rather than silently redefining "right".
+    """
+
+    @staticmethod
+    def _facet_tilt(theta_s, theta_v=40.0, dphi=135.0):
+        ts, tv, dp = (math.radians(v) for v in (theta_s, theta_v, dphi))
+        sdotv = math.sin(ts) * math.sin(tv) * math.cos(dp) + math.cos(ts) * math.cos(tv)
+        return math.degrees(math.acos((math.cos(ts) + math.cos(tv))
+                                      / math.sqrt(2.0 + 2.0 * sdotv)))
+
+    def test_the_window_is_symmetric_about_45_degrees(self):
+        """The whole reason 30-60 was chosen: elevation and zenith give the SAME window,
+        so the elevation/zenith ambiguity cannot produce a wrong answer."""
+        lo, hi = SOLAR_ELEVATION_PREFERRED
+        self.assertEqual((lo, hi), (SOLAR_ZENITH_MIN, SOLAR_ZENITH_MAX))
+        self.assertAlmostEqual((lo + hi) / 2.0, 45.0)
+
+    def test_glint_is_worst_at_high_sun_not_low(self):
+        """The counter-intuitive result the top of the window rests on. If the facet
+        tilt were monotonic in elevation this whole rationale would be wrong."""
+        tilts = {e: self._facet_tilt(90.0 - e) for e in range(5, 90, 5)}
+        worst = min(tilts, key=lambda e: tilts[e])
+        self.assertGreater(worst, 55.0, "glint minimum should sit at HIGH elevation")
+        self.assertLess(tilts[worst], 16.0)
+        self.assertGreater(tilts[20], tilts[worst] * 1.9,
+                           "low sun must be markedly safer from glint")
+
+    def test_dropping_from_60_to_30_cuts_the_glint_weight_by_an_order_of_magnitude(self):
+        sigma = math.sqrt(0.003 + 0.00512 * 5.0)
+        def w(elev):
+            t = math.tan(math.radians(self._facet_tilt(90.0 - elev)))
+            return math.exp(-t * t / (2.0 * sigma ** 2))
+        self.assertGreater(w(60.0) / w(30.0), 10.0)
+
+    def test_the_bottom_end_is_a_signal_limit(self):
+        """E_d on the horizontal goes as sin(elevation); half is the accepted floor."""
+        lo = SOLAR_ELEVATION_PREFERRED[0]
+        self.assertAlmostEqual(math.sin(math.radians(lo)), 0.50, places=2)
+        self.assertLess(math.sin(math.radians(SOLAR_ELEVATION_USABLE[0])), 0.35)
+
+    def test_verdict_tiers(self):
+        self.assertEqual(solar_window_verdict(45.0)[0], "preferred")
+        self.assertEqual(solar_window_verdict(30.0)[0], "preferred")
+        self.assertEqual(solar_window_verdict(60.0)[0], "preferred")
+        self.assertEqual(solar_window_verdict(25.0)[0], "usable")
+        self.assertEqual(solar_window_verdict(66.0)[0], "usable")
+        self.assertEqual(solar_window_verdict(15.0)[0], "outside")
+        self.assertEqual(solar_window_verdict(80.0)[0], "outside")
+        self.assertEqual(solar_window_verdict(-1.0)[0], "outside")
+
+    def test_each_end_names_its_own_limiting_physics(self):
+        """'Too high' is not actionable; 'glint' vs 'signal' is."""
+        self.assertIn("Glint", solar_window_verdict(75.0)[1])
+        self.assertIn("Signal", solar_window_verdict(22.0)[1])
+        self.assertNotIn("Glint", solar_window_verdict(22.0)[1])
+
+    def test_below_horizon_points_at_the_clock(self):
+        """The instrument clock on this unit was wrong by hours; GPS Time is right."""
+        self.assertIn("clock", solar_window_verdict(-10.0)[1])
+
+    def test_usable_property_uses_the_tight_window(self):
+        hi_usable = SOLAR_ELEVATION_USABLE[1]
+        sp = SolarPosition(90.0 - hi_usable, 180.0, hi_usable, 0.0, 0.0)
+        self.assertEqual(sp.tier, "usable")
+        self.assertFalse(sp.usable, "a green light must mean PREFERRED, not merely "
+                                    "not-failed")
 
 
 if __name__ == "__main__":

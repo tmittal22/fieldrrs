@@ -114,6 +114,7 @@ def side_view(ax):
             "Use GPS Time, not the clock.",
             fontsize=7.8, color=INK, ha="left", va="top", zorder=5, linespacing=1.35)
 
+
     # --- WATER ray: 40 deg from nadir  =  50 deg below horizontal
     ang = math.radians(90 - VIEW_ZENITH)     # below horizontal
     L = 2.9
@@ -252,16 +253,24 @@ def sky_strip(ax):
          "THE WORST CASE, worse than either extreme. E_d changes\n"
          "between panel and target scan; the error is unbounded and\n"
          "invisible. Wait for it to settle, or use the E_d sensor (page 2)."),
+        # Quoted as 30-60 on purpose: solar ELEVATION 30-60 and solar ZENITH 30-60 are
+        # the SAME window (symmetric about 45), so the elevation/zenith confusion the
+        # inset warns about cannot give a wrong answer here.
+        ("SUN 30–60° UP  (elev OR zenith)", "#8a6000", "#fff6d5",
+         "TOO HIGH → glint, worst near 66°. NOON IS THE WORST TIME.\n"
+         "TOO LOW  → weak, diffuse light. 30° = half the irradiance.\n"
+         "Usable 20–70°. Best MID-MORNING and MID-AFTERNOON."),
     ]
-    w = 3.24
+    w = 2.47
     for i, (title, col, fc, body) in enumerate(cases):
-        x = 0.12 + i * w
-        ax.add_patch(FancyBboxPatch((x, 0.04), w - 0.16, 0.92,
+        x = 0.10 + i * w
+        ax.add_patch(FancyBboxPatch((x, 0.04), w - 0.14, 0.92,
                                     boxstyle="round,pad=0.04", fc=fc, ec=col, lw=2.0))
-        ax.text(x + 0.12, 0.80, title, fontsize=10.5, weight="bold", color=col)
-        ax.text(x + 0.12, 0.62, body, fontsize=7.9, color=INK, va="top",
-                linespacing=1.30)
-    ax.text(5.0, 1.02, "FIRST DECISION AT EVERY STATION:  WHAT SKY IS IT?",
+        ax.text(x + 0.10, 0.80, title, fontsize=9.0, weight="bold", color=col)
+        ax.text(x + 0.10, 0.62, body, fontsize=6.9, color=INK, va="top",
+                linespacing=1.32)
+    ax.text(5.0, 1.02,
+            "FIRST DECISIONS AT EVERY STATION:  WHAT SKY IS IT, AND WHERE IS THE SUN?",
             fontsize=11, weight="bold", color=INK, ha="center")
 
 

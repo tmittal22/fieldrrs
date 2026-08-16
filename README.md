@@ -46,6 +46,36 @@ all and points at a stale calibration, a tilted collector or a shaded panel. C i
 reflectance setup B existed to remove. Run it **once per deployment**, and again after
 anything gets knocked.
 
+## When can you measure? Sun 30–60° above the horizon
+
+**PREFERRED: solar elevation 30–60°.** That number is chosen so it is also solar *zenith*
+30–60° — the window is symmetric about 45°, so it is right whichever convention you mean.
+This matters because the instrument logs "Solar Angle" as an **elevation** with no label,
+and elevation/zenith get confused constantly. **USABLE 20–70°**; nothing fails outside
+30–60, ρ = 0.028 is just less well determined.
+
+Both ends were **computed**, not adopted — `python analysis_solar_window.py`, plotted in
+`figures_solar_window.png` and THEORY.pdf p6:
+
+- **Top end is GLINT, and the direction is the surprise.** A wave facet puts the sun in
+  the field of view when its normal bisects the sun and view directions. That required
+  tilt is *minimised* at ~66° elevation, at only 15.2°, where Cox & Munk (1954) slope
+  statistics put such facets just **1.6σ** from the mean at 5 m/s — common. Going from 60°
+  to 30° elevation raises the required tilt to 25.8° and cuts the glint weight **15×**.
+  **High sun is the glint problem, not low sun. Noon is the worst time, not the best.**
+- **Bottom end is SIGNAL.** E_d on the horizontal goes as sin(elevation): 50 % of overhead
+  at 30°, 34 % at 20°, and the airmass roughly doubles over that span so the light is both
+  weaker and more diffuse.
+- **Not a constraint, though everyone assumes it is: your own shadow.** Reach is the wrong
+  test — the shadow runs along the anti-solar bearing while the target sits 45° off it, so
+  the miss distance is a fixed **1.74 m lateral**, independent of solar elevation. At 10°
+  elevation a 2 m operator throws an 11.3 m shadow and still misses by 1.74 m. A *boat or
+  pier* is a bigger object and can shadow the spot — that is the IOCCG argument for 90°
+  azimuth, where the clearance is 2.47 m.
+
+So: **mid-morning and mid-afternoon.** `WHERE IS THE SUN?` in the GUI prints the
+elevation, the tier, and which limit you are near.
+
 ---
 
 **Print [`FIELD_CARD.pdf`](FIELD_CARD.pdf)** — A3 landscape, **two pages, print
@@ -56,10 +86,10 @@ sky-condition decision strip, and the three-step sequence.
 *Page 2*: working under cloud, the E_d sensor path, and the products the absolute
 calibration supports (PAR, nLw).
 
-**Read [`THEORY.pdf`](THEORY.pdf)** (5 pages, A3) for the physics behind all of it:
+**Read [`THEORY.pdf`](THEORY.pdf)** (6 pages, A3) for the physics behind all of it:
 the three governing equations and why ρ is not a Fresnel coefficient; the A-vs-B
 capability chart above with its error budget; every cross-check and what each one can
-and cannot catch; and the products an absolute irradiance channel supports.
+and cannot catch; the products an absolute irradiance channel supports; and where the sun has to be.
 Read [`FIELD_PROTOCOL.md`](FIELD_PROTOCOL.md) before collecting data.
 
 Regenerate with `python make_field_card.py` and `python make_theory_pdf.py`. Those two

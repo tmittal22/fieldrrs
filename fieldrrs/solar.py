@@ -18,6 +18,8 @@ __all__ = [
     "solar_position", "pointing", "SolarPosition", "Pointing",
     "DEFAULT_VIEW_ZENITH", "DEFAULT_RELATIVE_AZIMUTH",
     "SOLAR_ZENITH_MIN", "SOLAR_ZENITH_MAX",
+    "SOLAR_ZENITH_USABLE_MIN", "SOLAR_ZENITH_USABLE_MAX",
+    "SOLAR_ELEVATION_PREFERRED", "SOLAR_ELEVATION_USABLE", "solar_window_verdict",
 ]
 
 #: Mobley (1999) recommended viewing geometry, endorsed by the IOCCG Protocol Series
@@ -39,11 +41,80 @@ ALT_RELATIVE_AZIMUTH = 90.0
 #: of view (IOCCG v3.0 Ch. 5, "Field-of-view").
 MAX_RECOMMENDED_FOV_DEG = 20.0
 
-#: Usable solar-zenith window for above-water radiometry. Outside it, either the sun is
-#: high enough that glint is hard to avoid, or low enough that the signal is weak and
-#: the atmospheric path long.
-SOLAR_ZENITH_MIN = 20.0
+#: Solar-position window for above-water radiometry.
+#:
+#: PREFERRED is 30-60 deg, and the single most useful thing about that number is that it
+#: is SYMMETRIC ABOUT 45 deg: solar elevation 30-60 and solar zenith 30-60 are the SAME
+#: window. Elevation and zenith are confused constantly in the field -- this instrument's
+#: own metadata reports "Solar Angle" as an ELEVATION with no label -- and quoting
+#: "30 to 60 degrees" is correct whichever the reader assumes.
+#:
+#: Both ends were COMPUTED, not adopted (``analysis_solar_window.py``,
+#: ``figures_solar_window.png``), at the shipped 40 deg / 135 deg geometry:
+#:
+#: TOP end is set by GLINT, and the direction is the counter-intuitive one. A wave facet
+#: puts the sun in the field of view when its normal bisects the sun and view
+#: directions; that required tilt is MINIMISED at about 66 deg elevation, where it is
+#: only 15.2 deg. Under Cox & Munk (1954) slope statistics (sigma^2 = 0.003 + 0.00512 W)
+#: such facets sit 1.6 sigma from the mean at 5 m/s -- common. Dropping from 60 to 30 deg
+#: elevation raises the required tilt to 25.8 deg and cuts the Gaussian glint weight
+#: 15-fold, 0.254 -> 0.017. HIGH SUN IS THE GLINT PROBLEM, not low sun.
+#:
+#: BOTTOM end is set by SIGNAL. E_d on the horizontal goes as sin(elevation): 0.50 of
+#: overhead at 30 deg, 0.34 at 20 deg, and the airmass roughly doubles over that span so
+#: the direct beam is attenuated further and the field grows more diffuse.
+#:
+#: NOT a constraint, though it is widely assumed to be: the operator's own shadow. Reach
+#: is the wrong test. The shadow runs along the anti-solar bearing while the target sits
+#: 45 deg off it at 135 deg relative azimuth, so the miss distance is a FIXED 1.74 m
+#: lateral at 3.8 m range, independent of solar elevation. A person never shadows the
+#: spot here. A boat or a pier is a larger object and can, which is the IOCCG argument
+#: for 90 deg azimuth (``ALT_RELATIVE_AZIMUTH``), where the clearance is 2.47 m.
+#:
+#: USABLE widens to 20-70 deg elevation. Nothing fails there; the top costs glint
+#: stability and the bottom costs signal, so rho = 0.028 is simply less well determined.
+SOLAR_ELEVATION_PREFERRED = (30.0, 60.0)
+SOLAR_ELEVATION_USABLE = (20.0, 70.0)
+
+#: The same PREFERRED window expressed as zenith angle -- numerically identical, because
+#: the window is symmetric about 45 deg. Kept as separate names so calling code never has
+#: to remember which convention a bare pair of numbers is in.
+SOLAR_ZENITH_MIN = 30.0
 SOLAR_ZENITH_MAX = 60.0
+SOLAR_ZENITH_USABLE_MIN = 20.0
+SOLAR_ZENITH_USABLE_MAX = 70.0
+
+
+def solar_window_verdict(elevation_deg):
+    """Grade a solar elevation. Returns (tier, message).
+
+    tier is "preferred", "usable" or "outside". The message names the LIMITING physics
+    rather than just the number, because "the sun is too high" is not actionable and
+    "wait an hour, glint facets are 1.6 sigma away right now" is.
+    """
+    lo_p, hi_p = SOLAR_ELEVATION_PREFERRED
+    lo_u, hi_u = SOLAR_ELEVATION_USABLE
+    e = float(elevation_deg)
+    if e < 0.0:
+        return "outside", ("Sun is BELOW the horizon (elevation %.1f deg). Check the "
+                           "clock and the UTC offset -- the instrument clock is a "
+                           "common culprit; the GPS time is authoritative." % e)
+    if lo_p <= e <= hi_p:
+        return "preferred", ("Solar elevation %.1f deg is in the PREFERRED 30-60 deg "
+                             "window (= zenith 30-60, the window is symmetric)." % e)
+    if e > hi_p:
+        tier = "usable" if e <= hi_u else "outside"
+        return tier, ("Solar elevation %.1f deg is HIGH. Glint is the limit at this "
+                      "end: the facet tilt that puts the sun in the field of view is "
+                      "smallest near 66 deg elevation, so rho = 0.028 is least reliable "
+                      "here. Prefer 30-60 deg; wait for the sun to drop." % e)
+    tier = "usable" if e >= lo_u else "outside"
+    return tier, ("Solar elevation %.1f deg is LOW. Signal is the limit at this end: "
+                  "E_d on the horizontal is only %.0f %% of its overhead value and the "
+                  "atmospheric path is long, so the light is weak and increasingly "
+                  "diffuse. Prefer 30-60 deg."
+                  % (e, 100.0 * math.sin(math.radians(max(e, 0.0)))))
+
 
 _COMPASS = ("N", "NNE", "NE", "ENE", "E", "ESE", "SE", "SSE",
             "S", "SSW", "SW", "WSW", "W", "WNW", "NW", "NNW")
@@ -62,24 +133,24 @@ class SolarPosition(object):
         return compass_point(self.azimuth)
 
     @property
+    def tier(self):
+        """"preferred", "usable" or "outside" -- see :func:`solar_window_verdict`."""
+        return solar_window_verdict(self.elevation)[0]
+
+    @property
     def usable(self):
-        return SOLAR_ZENITH_MIN <= self.zenith <= SOLAR_ZENITH_MAX
+        """True inside the PREFERRED 30-60 deg window.
+
+        Deliberately the tight window, not the wide one: this is what the GUI colours
+        green, and a green light should mean "go", not "nothing has actually failed".
+        Read :attr:`tier` when the three-way distinction matters.
+        """
+        return self.tier == "preferred"
 
     def advice(self):
-        if self.elevation <= 0:
-            return ("The sun is below the horizon (elevation %.1f deg). There is no "
-                    "measurement to make." % self.elevation)
-        if self.zenith < SOLAR_ZENITH_MIN:
-            return ("Solar zenith %.1f deg: the sun is very high. Sun glint is hard to "
-                    "avoid at any azimuth and rho is less reliable. Prefer a solar "
-                    "zenith of %.0f-%.0f deg." % (self.zenith, SOLAR_ZENITH_MIN,
-                                                  SOLAR_ZENITH_MAX))
-        if self.zenith > SOLAR_ZENITH_MAX:
-            return ("Solar zenith %.1f deg: the sun is low, so the signal is weak, the "
-                    "atmospheric path is long, and rho grows. Usable but note it."
-                    % self.zenith)
-        return ("Solar zenith %.1f deg: inside the %.0f-%.0f deg window. Good."
-                % (self.zenith, SOLAR_ZENITH_MIN, SOLAR_ZENITH_MAX))
+        msg = solar_window_verdict(self.elevation)[1]
+        return ("%s  [elevation %.1f deg = zenith %.1f deg]"
+                % (msg, self.elevation, self.zenith))
 
     def __repr__(self):
         return ("SolarPosition(zenith=%.2f, azimuth=%.2f (%s), elevation=%.2f)"
