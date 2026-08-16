@@ -226,33 +226,64 @@ not, and the error is unbounded and invisible in the output.
 If the sky is patchy, either wait for it to become uniformly overcast or uniformly clear,
 or use the irradiance channel below.
 
-### Your cosine-collector irradiance sensor solves exactly this
+### Your separate irradiance instrument solves exactly this
 
-If you take an E_d scan with the cosine diffuser fitted, DARWin writes an
-`Irr. (Target)` or `Irr. (Ref.)` column, and the software can use **measured E_d** rather
-than inferring it from the panel:
+The irradiance sensor is a **second physical instrument** with a wide (hemispherical)
+field of view, logging E_d at the **same moment** as the radiance scans. It is not a
+diffuser foreoptic swapped onto the NaturaSpec. In the GUI it is the fourth slot,
+**LOAD ED**, and loading it switches which physics runs:
+
+| E_d slot | what runs |
+|---|---|
+| empty | `E_d = π L_panel / R_panel` (the panel route) |
+| filled | E_d measured; **the panel drops out of R_rs entirely** |
+| both filled | the above, **plus** an inter-instrument cross-calibration |
 
 ```python
-res = rrs_from_sed(water, sky, source="irradiance")
+res = rrs_from_separate_ed(wavelength, l_target, l_sky, ed_measured, ed_wavelength)
 ```
 
-What that buys:
+The two instruments need not share a wavelength grid; E_d is interpolated onto the
+radiance grid, and radiance bands outside the irradiance sensor's range are reported
+rather than silently extrapolated.
+
+**What it buys:**
 
 - **No panel-to-target time lag.** E_d is measured with the target, so changing light
   stops being an error. This is the fix for broken cloud.
-- **The panel reflectance drops out entirely.** No 0.99 assumption, no calibration
-  certificate, no direct multiplicative bias.
-- **Panel levelness stops mattering.** The cosine collector defines the horizontal plane
-  itself.
+- **The panel reflectance drops out entirely.** No 0.99 assumption, no certificate.
+- **Panel levelness stops mattering.** The collector defines the horizontal plane itself.
 
-Conditions: the irradiance channel must be radiometrically calibrated in W m⁻² nm⁻¹ and
-consistent with the radiance calibration, and the collector must be **level** for the
-same reason the panel had to be. Its cosine response error is also better behaved under
-diffuse light than under a low direct sun, so overcast is where it performs best.
+**⚠ What it costs, and this is new.** R_rs now divides a radiance measured by instrument A
+by an irradiance measured by instrument B, so **any offset between their absolute
+calibrations is a direct multiplicative bias on every R_rs**. It does not average out and
+nothing in the spectrum reveals it. Measured: a 6 % gain offset moves R_rs(443) by
+**−5.7 %**, uniformly and silently.
 
-Verified by test: the irradiance path recovers a known R_rs to 9 decimal places and is
-completely independent of the panel reflectance, where the radiance path scales linearly
-with it.
+**So keep taking the panel scan.** It stops being the E_d source and becomes the
+**transfer standard** that ties the two instruments together:
+
+```
+C(λ) = [π · L_panel(λ) / R_panel(λ)] / E_d_measured(λ)
+```
+
+Load the panel and the E_d file together and the GUI computes C and prints a verdict.
+A **flat** disagreement behaves like a gain offset. A **spectrally structured** one is not
+a gain at all and points at a stale calibration, a tilted collector or a partly shaded
+panel. C is **reported, not applied automatically**: multiplying it back in re-introduces
+the panel reflectance the separate sensor was there to remove, so that is your call.
+Run it **once per deployment**, and again after anything gets knocked.
+
+Conditions: the irradiance channel must be radiometrically calibrated in W m⁻² nm⁻¹, and
+the collector must be **level** for the same reason the panel had to be. Its cosine
+response error is better behaved under diffuse light than under a low direct sun, so
+overcast is where it performs best. A file with no irradiance column is **refused**, not
+silently used: dividing by a radiance would be wrong by a factor of π and would look
+entirely plausible in the output.
+
+Verified by test: the measured-E_d path recovers a known R_rs across mismatched
+wavelength grids, contains no panel term at all, and the cross-calibration recovers an
+injected 6 % gain offset as C = 1/1.06 with zero spectral spread.
 
 ---
 
