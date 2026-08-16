@@ -21,7 +21,7 @@ import math
 __all__ = [
     "RHO_MOBLEY1999", "SIMILARITY_780_870", "RrsResult",
     "rrs_three_scan", "rrs_from_sed", "residual_correction", "rho_advice",
-    "overcast_notes", "par_from_ed", "integrated_irradiance",
+    "overcast_notes", "par_from_ed", "integrated_irradiance", "ed_stability",
 ]
 
 #: Mobley (1999) effective sea-surface radiance reflectance for the recommended
@@ -433,3 +433,51 @@ def integrated_irradiance(wavelength, ed, lo=400.0, hi=700.0):
                          % (lo, hi))
     return sum(0.5 * (e0 + e1) * (w1 - w0)
                for (w0, e0), (w1, e1) in zip(pts[:-1], pts[1:]))
+
+
+def ed_stability(ed_before, ed_after, wavelength=None, lo=400.0, hi=700.0,
+                 tolerance=0.02):
+    """Did the light change during the station? The QC a panel alone cannot give you.
+
+    Take an E_d scan before the target sequence and another after. If they differ, the
+    station was measured under changing illumination and every R_rs in it is suspect,
+    because the whole method assumes E_d is the same for the reference and the target.
+
+    With a panel you can only test this by re-scanning the panel, which costs a scan and
+    still leaves the moment between them unsampled. With a cosine collector it is two
+    cheap scans that bracket the station.
+
+    Returns a dict with the mean and worst fractional change and a verdict. ``tolerance``
+    is the fraction above which the station is flagged; 2 % is a reasonable field bar.
+    """
+    if len(ed_before) != len(ed_after):
+        raise ValueError("the two E_d scans must be on the same wavelength grid")
+    idx = range(len(ed_before))
+    if wavelength is not None:
+        if len(wavelength) != len(ed_before):
+            raise ValueError("wavelength length does not match the E_d scans")
+        idx = [i for i in idx if lo <= wavelength[i] <= hi]
+    pairs = [(ed_before[i], ed_after[i]) for i in idx
+             if ed_before[i] == ed_before[i] and ed_before[i] > 0
+             and ed_after[i] == ed_after[i]]
+    if not pairs:
+        raise ValueError("no usable bands in %.0f-%.0f nm" % (lo, hi))
+
+    frac = [abs(b - a) / a for a, b in pairs]
+    mean_change = sum(frac) / len(frac)
+    worst = max(frac)
+    ratio = sum(b for _, b in pairs) / sum(a for a, _ in pairs)
+    stable = worst <= tolerance
+    return {
+        "mean_change": mean_change,
+        "worst_change": worst,
+        "after_over_before": ratio,
+        "n_bands": len(pairs),
+        "stable": stable,
+        "verdict": (
+            "E_d stable to %.1f %% across the station." % (100 * worst) if stable else
+            "E_d CHANGED by up to %.1f %% (mean %.1f %%, net %+.1f %%) during the "
+            "station. The method assumes E_d is the same for reference and target, so "
+            "every R_rs here is suspect. Re-measure, or flag these data."
+            % (100 * worst, 100 * mean_change, 100 * (ratio - 1))),
+    }

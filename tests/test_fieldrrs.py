@@ -9,7 +9,7 @@ import unittest
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from fieldrrs import (  # noqa: E402
-    RHO_MOBLEY1999, overcast_notes, par_from_ed, integrated_irradiance, bin_spectrum, gaussian_resample, read_sed, residual_correction,
+    RHO_MOBLEY1999, overcast_notes, par_from_ed, integrated_irradiance, ed_stability, bin_spectrum, gaussian_resample, read_sed, residual_correction,
     rho_advice, rrs_from_sed, rrs_three_scan, write_batch_csv, write_rrs_csv,
 )
 from fieldrrs.sed import guess_role  # noqa: E402
@@ -618,6 +618,34 @@ class TestAbsoluteRadiometry(unittest.TestCase):
         self.assertEqual(n, 2)
         self.assertAlmostEqual(par, integrated_irradiance(wl, ed) * 550.0 / 119.6,
                                places=3)
+
+
+class TestEdStability(unittest.TestCase):
+    """Bracketing a station with two E_d scans: the QC a panel alone cannot give."""
+
+    WL = [400.0 + i for i in range(301)]
+
+    def test_stable_light_passes(self):
+        r = ed_stability([1.0] * 301, [1.005] * 301, self.WL)
+        self.assertTrue(r["stable"])
+        self.assertAlmostEqual(r["worst_change"], 0.005, places=6)
+
+    def test_a_cloud_crossing_is_caught_and_signed(self):
+        r = ed_stability([1.0] * 301, [0.78] * 301, self.WL)
+        self.assertFalse(r["stable"])
+        self.assertAlmostEqual(r["after_over_before"], 0.78, places=6)
+        self.assertIn("every R_rs here is suspect", r["verdict"])
+
+    def test_only_the_requested_window_is_judged(self):
+        """Junk outside 400-700 must not decide the verdict."""
+        wl = [300.0, 500.0, 600.0, 900.0]
+        r = ed_stability([1.0, 1.0, 1.0, 1.0], [99.0, 1.0, 1.0, 99.0], wl)
+        self.assertEqual(r["n_bands"], 2)
+        self.assertTrue(r["stable"])
+
+    def test_mismatched_grids_refused(self):
+        with self.assertRaises(ValueError):
+            ed_stability([1.0, 1.0], [1.0])
 
 
 if __name__ == "__main__":
