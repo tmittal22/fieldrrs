@@ -203,10 +203,12 @@ R_rs(l) = L_w(l) / E_d(l) - delta
 - `delta` is the residual glint offset: `none` (default), `nir_zero` (clear water only),
   or `nir_similarity` (Ruddick et al. 2006, usable in turbid water).
 
-`source="irradiance"` uses **measured E_d** from a cosine collector instead of inferring
-it from the panel. Preferred whenever the light is changing: it removes the
-panel-to-target time lag, the panel reflectance and the panel-levelness error at once.
-See `overcast_notes()` and FIELD_PROTOCOL.md for when this matters.
+For **measured** E_d from the separate irradiance instrument, use
+`rrs_from_separate_ed(...)` rather than a `source=` flag: it takes the E_d array and its
+own wavelength grid, and no panel term appears in it at all. Preferred whenever the light
+is changing, because it removes the panel-to-target time lag, the panel reflectance and
+the panel-levelness error at once. See the capability table at the top of this file, plus
+`overcast_notes()` and FIELD_PROTOCOL.md.
 
 **No wind-dependent rho table is bundled.** Mobley (2015) published one and it is not
 redistributable. Above ~5 m s⁻¹ the software refuses to invent a value and tells you what
