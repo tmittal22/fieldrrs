@@ -46,5 +46,7 @@ jobs:
           path: |
             dist/fieldrrs.exe
             FIELD_CARD.pdf
+            THEORY.pdf
             FIELD_PROTOCOL.md
+            README.md
           if-no-files-found: error
