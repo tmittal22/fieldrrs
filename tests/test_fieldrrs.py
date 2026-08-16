@@ -9,8 +9,22 @@ import unittest
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from fieldrrs import (  # noqa: E402
-    RHO_MOBLEY1999, overcast_notes, par_from_ed, integrated_irradiance, ed_stability, bin_spectrum, gaussian_resample, read_sed, residual_correction,
-    rho_advice, rrs_from_sed, rrs_three_scan, write_batch_csv, write_rrs_csv,
+    RHO_MOBLEY1999,
+    bin_spectrum,
+    cross_calibration_factor,
+    ed_stability,
+    gaussian_resample,
+    integrated_irradiance,
+    overcast_notes,
+    par_from_ed,
+    read_sed,
+    residual_correction,
+    rho_advice,
+    rrs_from_sed,
+    rrs_from_separate_ed,
+    rrs_three_scan,
+    write_batch_csv,
+    write_rrs_csv,
 )
 from fieldrrs.sed import guess_role  # noqa: E402
 from fieldrrs.solar import (  # noqa: E402
@@ -646,6 +660,97 @@ class TestEdStability(unittest.TestCase):
     def test_mismatched_grids_refused(self):
         with self.assertRaises(ValueError):
             ed_stability([1.0, 1.0], [1.0])
+
+
+class TestTwoInstrumentSetup(unittest.TestCase):
+    """A SEPARATE hemispherical irradiance sensor beside the narrow-FOV radiometer.
+
+    Better in the way that matters most, E_d logged simultaneously so the unchanged-light
+    assumption disappears, at the cost of an error a single instrument does not have:
+    R_rs divides a radiance from one instrument by an irradiance from another, so their
+    relative calibration is a direct multiplicative bias.
+    """
+
+    RWL = [350.0 + i for i in range(651)]          # radiance instrument, 1 nm
+    EWL = [400.0 + 3.3 * i for i in range(152)]    # irradiance instrument, its own grid
+
+    @staticmethod
+    def _ed(w):
+        return 1.1 * math.exp(-((w - 550) ** 2) / (2 * 300.0 ** 2)) + 0.2
+
+    def _scene(self, gain=1.0):
+        panel = [self._ed(w) * 0.99 / math.pi for w in self.RWL]
+        sky = [0.02 * self._ed(w) / math.pi for w in self.RWL]
+        water = [clear_water(w) * self._ed(w) + RHO_MOBLEY1999 * s
+                 for w, s in zip(self.RWL, sky)]
+        ed_meas = [self._ed(w) * gain for w in self.EWL]
+        return panel, sky, water, ed_meas
+
+    def test_recovers_the_known_rrs_across_mismatched_grids(self):
+        """The two instruments do not share a wavelength grid, and must not need to."""
+        panel, sky, water, ed = self._scene()
+        res = rrs_from_separate_ed(self.RWL, water, sky, ed, self.EWL)
+        for i, w in enumerate(self.RWL):
+            if 420 <= w <= 880:
+                self.assertAlmostEqual(res.rrs[i], clear_water(w), places=5)
+
+    def test_no_panel_enters_the_calculation(self):
+        """The whole point: panel reflectance cannot bias this path because it is
+        never used. Contrast the panel path, which scales linearly with it."""
+        panel, sky, water, ed = self._scene()
+        a = rrs_from_separate_ed(self.RWL, water, sky, ed, self.EWL)
+        self.assertTrue(any("panel" in n.lower() and "absent" in n.lower()
+                            for n in a.notes))
+
+    def test_cross_calibration_detects_a_gain_offset(self):
+        """A 6 % offset between instruments must show up as C = 1/1.06 and flat."""
+        panel, sky, water, ed = self._scene(gain=1.06)
+        c = cross_calibration_factor(self.RWL, panel, ed, self.EWL)
+        self.assertAlmostEqual(c["mean"], 1.0 / 1.06, places=3)
+        self.assertLess(c["spread"], 0.01)
+        self.assertFalse(c["agree"])
+        self.assertIn("spectrally flat", c["verdict"])
+
+    def test_a_gain_offset_biases_every_rrs_by_the_same_fraction(self):
+        """This is why cross-calibration matters: it is not noise, it is a bias."""
+        _, sky, water, ed_ok = self._scene(gain=1.0)
+        _, _, _, ed_off = self._scene(gain=1.06)
+        a = rrs_from_separate_ed(self.RWL, water, sky, ed_ok, self.EWL)
+        b = rrs_from_separate_ed(self.RWL, water, sky, ed_off, self.EWL)
+        i = min(range(len(self.RWL)), key=lambda j: abs(self.RWL[j] - 443))
+        self.assertAlmostEqual(b.rrs[i] / a.rrs[i], 1.0 / 1.06, places=6)
+
+    def test_matched_instruments_are_declared_to_agree(self):
+        panel, sky, water, ed = self._scene()
+        c = cross_calibration_factor(self.RWL, panel, ed, self.EWL)
+        self.assertTrue(c["agree"])
+        self.assertIn("Use the measured E_d directly", c["verdict"])
+
+    def test_applying_the_factor_removes_the_bias(self):
+        panel, sky, water, ed = self._scene(gain=1.06)
+        c = cross_calibration_factor(self.RWL, panel, ed, self.EWL)
+        res = rrs_from_separate_ed(self.RWL, water, sky, ed, self.EWL,
+                                   calibration_factor=c["factor"])
+        i = min(range(len(self.RWL)), key=lambda j: abs(self.RWL[j] - 443))
+        self.assertAlmostEqual(res.rrs[i], clear_water(443.0), places=5)
+
+    def test_uncorrected_path_warns_about_the_combined_calibration(self):
+        panel, sky, water, ed = self._scene()
+        res = rrs_from_separate_ed(self.RWL, water, sky, ed, self.EWL)
+        self.assertTrue(any("COMBINED absolute calibration" in n for n in res.notes))
+
+    def test_bands_outside_the_irradiance_range_are_reported(self):
+        """The radiance instrument reaches 350 and 1000 nm; the irradiance one does
+        not. Those bands must be flagged, not silently extrapolated."""
+        panel, sky, water, ed = self._scene()
+        res = rrs_from_separate_ed(self.RWL, water, sky, ed, self.EWL)
+        self.assertTrue(any("OUTSIDE the irradiance sensor" in n for n in res.notes))
+
+    def test_mismatched_grid_without_ed_wavelength_is_refused(self):
+        panel, sky, water, ed = self._scene()
+        with self.assertRaises(ValueError) as cm:
+            rrs_from_separate_ed(self.RWL, water, sky, ed)
+        self.assertIn("ed_wavelength", str(cm.exception))
 
 
 if __name__ == "__main__":

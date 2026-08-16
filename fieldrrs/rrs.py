@@ -22,6 +22,7 @@ __all__ = [
     "RHO_MOBLEY1999", "SIMILARITY_780_870", "RrsResult",
     "rrs_three_scan", "rrs_from_sed", "residual_correction", "rho_advice",
     "overcast_notes", "par_from_ed", "integrated_irradiance", "ed_stability",
+    "cross_calibration_factor", "rrs_from_separate_ed",
 ]
 
 #: Mobley (1999) effective sea-surface radiance reflectance for the recommended
@@ -481,3 +482,180 @@ def ed_stability(ed_before, ed_after, wavelength=None, lo=400.0, hi=700.0,
             "every R_rs here is suspect. Re-measure, or flag these data."
             % (100 * worst, 100 * mean_change, 100 * (ratio - 1))),
     }
+
+
+# ----------------------------------------------------------------------------------
+# TWO-INSTRUMENT SETUP: a separate hemispherical irradiance sensor alongside the
+# narrow-FOV radiance spectroradiometer.
+#
+# This is the classic above-water configuration (the arrangement a HyperSAS-style rig
+# uses) and it is better than a single instrument in the one way that matters most:
+# E_d is logged SIMULTANEOUSLY with the radiance, so the assumption that E_d is
+# unchanged between reference and target is no longer an assumption.
+#
+# It buys that at the cost of a new error that a single-instrument setup does not have.
+# R_rs = L_w / E_d now divides a radiance measured by instrument A by an irradiance
+# measured by instrument B, so ANY offset between their absolute calibrations is a
+# direct multiplicative bias on every R_rs. Two separately calibrated instruments agree
+# to their combined calibration uncertainty, typically several percent, and that does
+# not cancel anywhere.
+#
+# The fix is that you already own the transfer standard: the panel. Point the radiance
+# sensor at the panel while the irradiance sensor sees the same sky, and the ratio of
+# the two E_d estimates is the inter-instrument factor.
+
+
+def cross_calibration_factor(wavelength, l_panel, ed_measured, ed_wavelength=None,
+                             panel_reflectance=DEFAULT_PANEL_REFLECTANCE):
+    """Tie a separate irradiance sensor to the radiance sensor, using the panel.
+
+    Two independent estimates of the same downwelling irradiance:
+
+        E_d from the panel  = pi * L_panel / R_panel     (radiance instrument)
+        E_d measured        = the irradiance sensor's own reading
+
+    Their ratio is the inter-instrument calibration factor C(lambda):
+
+        C(lambda) = [pi * L_panel(lambda) / R_panel(lambda)] / E_d_measured(lambda)
+
+    **Use it as a diagnostic first.** If C is near 1 and spectrally flat, the two
+    instruments agree and the measured E_d can be trusted directly. If C is far from 1,
+    or has structure in wavelength, something is wrong: a stale calibration, a tilted
+    collector, a shaded panel, or a mismatch in how the two were calibrated.
+
+    You *can* multiply by C to force agreement, but understand what that costs: it makes
+    the result depend on the panel reflectance again, which is exactly the error the
+    separate irradiance sensor was removing. Correct only if you have reason to trust the
+    panel more than the irradiance calibration.
+
+    ``ed_wavelength`` lets the irradiance sensor live on its own grid; E_d is
+    interpolated onto the radiance grid, which is what a two-instrument setup needs.
+    """
+    from .resample import interp_linear
+
+    n = len(wavelength)
+    if len(l_panel) != n:
+        raise ValueError("l_panel does not match the radiance wavelength grid")
+
+    if ed_wavelength is not None:
+        ed = interp_linear(list(ed_wavelength), list(ed_measured), list(wavelength))
+    else:
+        if len(ed_measured) != n:
+            raise ValueError(
+                "ed_measured has %d points against %d radiance bands. Pass "
+                "ed_wavelength so the two grids can be matched: separate instruments "
+                "rarely share a grid." % (len(ed_measured), n))
+        ed = list(ed_measured)
+
+    rp = ([float(panel_reflectance)] * n
+          if isinstance(panel_reflectance, (int, float)) else list(panel_reflectance))
+
+    c, used = [], []
+    for i in range(n):
+        e_panel = math.pi * l_panel[i] / rp[i] if rp[i] > 0 else float("nan")
+        if ed[i] and ed[i] > 0 and e_panel == e_panel:
+            c.append(e_panel / ed[i])
+            used.append(wavelength[i])
+        else:
+            c.append(float("nan"))
+
+    vis = [c[i] for i in range(n)
+           if 400.0 <= wavelength[i] <= 700.0 and c[i] == c[i]]
+    if not vis:
+        raise ValueError("no usable bands in 400-700 nm to compare the two instruments")
+    mean = sum(vis) / len(vis)
+    spread = (max(vis) - min(vis)) / mean
+
+    if abs(mean - 1.0) <= 0.03 and spread <= 0.03:
+        verdict = ("The two instruments agree to %.1f %% (mean C = %.3f, spectral "
+                   "spread %.1f %%). Use the measured E_d directly."
+                   % (100 * abs(mean - 1), mean, 100 * spread))
+    elif spread > 0.05:
+        verdict = ("C varies by %.1f %% across 400-700 nm (mean %.3f). A spectrally "
+                   "STRUCTURED disagreement is not a simple gain offset: suspect a "
+                   "stale wavelength or radiometric calibration on one instrument, a "
+                   "tilted collector, or a partly shaded panel. Do not just multiply "
+                   "it out." % (100 * spread, mean))
+    else:
+        verdict = ("The two instruments differ by %.1f %% (mean C = %.3f) but the "
+                   "disagreement is spectrally flat, so it behaves like a gain offset. "
+                   "Decide which absolute scale you trust before correcting; applying C "
+                   "re-introduces the panel reflectance you were trying to avoid."
+                   % (100 * (mean - 1), mean))
+
+    return {"factor": c, "mean": mean, "spread": spread, "n_bands": len(vis),
+            "agree": abs(mean - 1.0) <= 0.03 and spread <= 0.03, "verdict": verdict}
+
+
+def rrs_from_separate_ed(wavelength, l_target, l_sky, ed_measured, ed_wavelength=None,
+                         rho=RHO_MOBLEY1999, residual="none", calibration_factor=None):
+    """R_rs using E_d from a SEPARATE irradiance instrument.
+
+        R_rs = (L_t - rho * L_sky) / (C * E_d_measured)
+
+    ``ed_wavelength`` lets the irradiance sensor be on its own grid; it is interpolated
+    onto the radiance grid. ``calibration_factor`` is optional and is what
+    :func:`cross_calibration_factor` returns as ``factor``; leave it None to trust the
+    irradiance sensor's own absolute scale, which is the point of having it.
+
+    No panel is involved anywhere in this path. The panel reflectance, the panel
+    levelness and the panel-to-target time lag all drop out, and because the two
+    instruments log at the same moment there is no changing-light assumption left to
+    violate.
+    """
+    from .resample import interp_linear
+
+    n = len(wavelength)
+    for name, arr in (("l_target", l_target), ("l_sky", l_sky)):
+        if len(arr) != n:
+            raise ValueError("%s does not match the radiance wavelength grid" % name)
+
+    if ed_wavelength is not None:
+        ed = interp_linear(list(ed_wavelength), list(ed_measured), list(wavelength))
+    else:
+        if len(ed_measured) != n:
+            raise ValueError(
+                "ed_measured has %d points against %d radiance bands; pass "
+                "ed_wavelength." % (len(ed_measured), n))
+        ed = list(ed_measured)
+
+    if calibration_factor is not None:
+        if len(calibration_factor) != n:
+            raise ValueError("calibration_factor does not match the radiance grid")
+        ed = [ed[i] * calibration_factor[i] for i in range(n)]
+
+    notes = ["E_d from a separate irradiance instrument. No panel enters this "
+             "calculation: panel reflectance, panel levelness and the panel-to-target "
+             "time lag are all absent."]
+    if calibration_factor is None:
+        notes.append("No inter-instrument calibration factor applied. R_rs therefore "
+                     "carries the COMBINED absolute calibration uncertainty of the two "
+                     "instruments as a multiplicative bias. Run "
+                     "cross_calibration_factor() against a panel scan to measure it.")
+
+    rrs, n_bad, n_out = [], 0, 0
+    for i in range(n):
+        w = l_target[i] - rho * l_sky[i]
+        if ed[i] and ed[i] > 0 and ed[i] == ed[i]:
+            rrs.append(w / ed[i])
+        else:
+            rrs.append(float("nan"))
+            n_bad += 1
+        if ed_wavelength is not None and not (
+                min(ed_wavelength) <= wavelength[i] <= max(ed_wavelength)):
+            n_out += 1
+    if n_bad:
+        notes.append("%d bands have zero or invalid E_d." % n_bad)
+    if n_out:
+        notes.append("%d radiance bands fall OUTSIDE the irradiance sensor's "
+                     "wavelength range and are extrapolated to NaN. The two "
+                     "instruments do not cover the same spectrum." % n_out)
+
+    off, method, more = residual_correction(wavelength, rrs, residual)
+    notes.extend(more)
+    rrs = [v - off for v in rrs]
+    res = RrsResult(list(wavelength), rrs, list(ed), None, float(rho), float(off),
+                    method, notes)
+    res.meta = {"ed_source": "separate irradiance instrument",
+                "cross_calibrated": calibration_factor is not None}
+    return res

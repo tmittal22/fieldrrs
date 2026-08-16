@@ -28,12 +28,14 @@ from .rrs import (
     RrsResult,
     average_results,
     residual_correction,
+    cross_calibration_factor,
     ed_stability,
     integrated_irradiance,
     overcast_notes,
     par_from_ed,
     rho_advice,
     rrs_from_sed,
+    rrs_from_separate_ed,
     rrs_three_scan,
 )
 from .sed import SedSpectrum, guess_role, read_folder, read_sed
@@ -45,6 +47,7 @@ __all__ = [
     "rrs_from_sed", "rrs_three_scan", "residual_correction", "rho_advice",
     "average_results", "RrsResult", "RHO_MOBLEY1999", "DEFAULT_PANEL_REFLECTANCE",
     "overcast_notes", "par_from_ed", "integrated_irradiance", "ed_stability",
+    "cross_calibration_factor", "rrs_from_separate_ed",
     "bin_spectrum", "gaussian_resample", "write_rrs_csv", "write_batch_csv",
     "SATELLITE_BANDS", "__version__",
 ]
