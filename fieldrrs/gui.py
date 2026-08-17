@@ -76,7 +76,7 @@ class App(tk.Tk):
         for i, (role, hint) in enumerate((
                 ("water", "40 deg from NADIR, 135 deg from sun"),
                 ("sky", "40 deg from ZENITH, same bearing as water"),
-                ("panel", "level white panel  (optional)"),
+                ("panel", "level white panel  (needed unless the water file has Rad. (Ref.))"),
                 ("ed", "SEPARATE irradiance sensor  (optional)"))):
             tk.Button(slots, text="LOAD %s" % role.upper(), font=BIGB, width=12, height=2,
                       bg=ROLE_COLOR[role], fg="white",
@@ -494,6 +494,25 @@ class App(tk.Tk):
             self.results = []
             self.log.delete("1.0", tk.END)
             geom = self._geometry_meta()
+            # PRE-FLIGHT: R_rs = L_w / E_d, so an irradiance reference is MANDATORY.
+            # There are three ways to supply one and the GUI must say so BEFORE it
+            # throws, because the failure mode otherwise is a raw KeyError dialog on
+            # 'rad_ref' that does not tell you to load a panel.
+            if ed_scan is None and panel is None and not waters[0].has("rad_ref"):
+                return messagebox.showwarning(
+                    "No irradiance reference",
+                    "Water and sky are loaded, but nothing tells me how BRIGHT the "
+                    "light was.\n\n"
+                    "R_rs = L_water / E_d. The sky scan removes reflected skylight; it "
+                    "does NOT supply E_d.\n\n"
+                    "'%s' has no 'Rad. (Ref.)' column, so give me ONE of:\n\n"
+                    "   1. LOAD PANEL  - a white-panel scan (3-file workflow)\n"
+                    "   2. re-export from DARWin in REFLECTANCE mode, which writes the\n"
+                    "        panel into every file's 'Rad. (Ref.)' column (2-file workflow)\n"
+                    "   3. LOAD ED  - a scan from the separate irradiance instrument\n\n"
+                    "Columns found in the water file: %s"
+                    % (waters[0].name, ", ".join(sorted(waters[0].raw_columns))))
+
             cal = None
             if ed_scan is not None:
                 self.say("SETUP B: separate irradiance sensor loaded (%s)."

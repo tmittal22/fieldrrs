@@ -999,5 +999,81 @@ class TestWhatIsActuallyRequired(unittest.TestCase):
             self.assertNotIn(banned, mods)
 
 
+def write_target_only(path, wl, target, comment):
+    """A RADIANCE-mode export: 'Rad. (Target)' only, NO 'Rad. (Ref.)' column."""
+    lines = ["Version: 2.4", "Instrument: NaturaSpecPlus_SN0000",
+             "Measurement: RADIANCE", "Comment: %s" % comment,
+             "Channels: %d" % len(wl), "Data:", "Wvl\tRad. (Target)"]
+    for w, t in zip(wl, target):
+        lines.append("%s\t%s" % (darwin_float(w), darwin_float(t)))
+    with open(path, "w") as fh:
+        fh.write("\n".join(lines))
+    return path
+
+
+class TestNoIrradianceReference(unittest.TestCase):
+    """Water + sky with no panel ANYWHERE.
+
+    Reported from the field as 'nothing plots'. R_rs = L_w / E_d, and the sky scan
+    removes reflected skylight without supplying E_d, so this is unrecoverable. It used
+    to surface as a bare KeyError on 'rad_ref', which does not tell an operator standing
+    at the water that the cure is to load a panel.
+    """
+
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp()
+        ed = [1.0 * math.exp(-((w - 550.0) ** 2) / (2 * 300.0 ** 2)) + 0.2 for w in WL]
+        sky = [0.02 * e / math.pi for e in ed]
+        water = [clear_water(w) * e + RHO_MOBLEY1999 * s
+                 for w, e, s in zip(WL, ed, sky)]
+        panel = [e * 0.99 / math.pi for e in ed]
+        self.W = read_sed(write_target_only(
+            os.path.join(self.tmp, "w.sed"), WL, water, "water"))
+        self.S = read_sed(write_target_only(
+            os.path.join(self.tmp, "s.sed"), WL, sky, "sky"))
+        self.P = read_sed(write_target_only(
+            os.path.join(self.tmp, "p.sed"), WL, panel, "panel"))
+        self.truth = clear_water(443.0)
+        self.i443 = min(range(len(WL)), key=lambda j: abs(WL[j] - 443))
+
+    def test_it_raises_valueerror_not_keyerror(self):
+        with self.assertRaises(ValueError):
+            rrs_from_sed(self.W, self.S, None)
+
+    def test_the_message_names_all_three_cures(self):
+        try:
+            rrs_from_sed(self.W, self.S, None)
+        except ValueError as exc:
+            m = str(exc)
+        self.assertIn("panel", m)
+        self.assertIn("REFLECTANCE", m)
+        self.assertIn("rrs_from_separate_ed", m)
+
+    def test_the_message_says_the_sky_scan_is_not_the_answer(self):
+        """The operator's mental model is 'I took two scans, that should be enough'."""
+        try:
+            rrs_from_sed(self.W, self.S, None)
+        except ValueError as exc:
+            self.assertIn("SKY scan does not supply it", str(exc))
+
+    def test_it_lists_the_columns_actually_found(self):
+        """So you can see WHY, without reopening the file."""
+        try:
+            rrs_from_sed(self.W, self.S, None)
+        except ValueError as exc:
+            self.assertIn("Rad. (Target)", str(exc))
+
+    def test_loading_a_panel_fixes_it(self):
+        """The error must be true: naming the cure is worthless if the cure fails."""
+        res = rrs_from_sed(self.W, self.S, self.P)
+        self.assertAlmostEqual(res.rrs[self.i443], self.truth, places=5)
+
+    def test_a_reflectance_mode_file_still_needs_no_panel(self):
+        """The two-file workflow must keep working; this guard must not break it."""
+        w, s, _p, _t = synthetic_station(self.tmp, clear_water)
+        res = rrs_from_sed(read_sed(w), read_sed(s), None)
+        self.assertAlmostEqual(res.rrs[self.i443], self.truth, places=5)
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

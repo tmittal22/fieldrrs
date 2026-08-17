@@ -297,8 +297,22 @@ def rrs_from_sed(water, sky, panel=None,
             if list(panel.wavelength) != list(wl):
                 raise ValueError("panel scan is on a different wavelength grid")
             lp = panel.radiance_target
-        else:
+        elif water.has("rad_ref"):
             lp = water.radiance_reference
+        else:
+            # Water + sky with no panel anywhere. This is the commonest field mistake
+            # and it is NOT recoverable: the sky scan removes reflected skylight, it
+            # does not tell you how bright the light was. Raise something that names
+            # all three cures instead of a KeyError on 'rad_ref'.
+            raise ValueError(
+                "No irradiance reference. R_rs = L_water / E_d, and nothing here "
+                "supplies E_d: no panel scan was passed, and '%s' has no "
+                "'Rad. (Ref.)' column (it has: %s). The SKY scan does not supply it. "
+                "Supply ONE of: (1) a panel scan as `panel=`; (2) files re-exported "
+                "from DARWin in REFLECTANCE mode, which write the panel into every "
+                "file's 'Rad. (Ref.)' column; (3) a measured irradiance spectrum via "
+                "`rrs_from_separate_ed(...)`."
+                % (water.name, ", ".join(sorted(water.raw_columns))))
         res = rrs_three_scan(wl, lt, ls, lp, panel_reflectance, rho, residual)
         res.meta = meta
         return res

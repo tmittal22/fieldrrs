@@ -205,8 +205,16 @@ blue-peaking spectrum with R_rs(443) near 0.0029 sr^-1 and no warnings.
 
 - **LOAD WATER** — the 40°-from-nadir, 135°-from-sun scan
 - **LOAD SKY** — the 40°-from-zenith scan on the same bearing
-- **LOAD PANEL** — *optional*. Leave it empty and the panel radiance is read from the
-  water file's own `Rad. (Ref.)` column, which is the DARWin reference-scan workflow.
+- **LOAD PANEL** — needed **unless** the water file already carries the panel in its
+  `Rad. (Ref.)` column, which is what DARWin writes in **REFLECTANCE** mode (the two-file
+  workflow). If you exported in RADIANCE mode you get `Rad. (Target)` only, and then the
+  panel scan is mandatory.
+
+> **Water + sky alone is not a complete measurement.** R_rs = L_water / E_d, and the sky
+> scan removes reflected skylight without telling you how *bright* the light was. You must
+> supply an irradiance reference by one of three routes: a **panel scan**, a **`Rad. (Ref.)`
+> column** inside the files, or a **measured E_d** file. The GUI now says which are missing
+> instead of failing with a `KeyError`.
 - **LOAD ED** — *optional*, and it is the **setup A / setup B switch**. Leave it empty
   and E_d comes from the panel (setup A). Load it and E_d is the measured irradiance
   (setup B), the panel drops out of R_rs entirely, and — if a panel is also loaded — the
