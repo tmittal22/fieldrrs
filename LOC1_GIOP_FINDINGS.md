@@ -3,7 +3,112 @@
 Input: `FINAL_Rrs.csv`, the amplitude-normalised mean of 12 angle-matched scans,
 Kotzebue 66.89718 N 162.60290 W, 2026-08-16 20:24–20:41 UTC.
 
-**Summary: run it HYPERSPECTRAL, quote a_dg and b_bp, do not quote chlorophyll.**
+**Summary: run it HYPERSPECTRAL, fit S_dg rather than assuming it, quote a_dg and b_bp
+as ~40 % below the fixed-shape values, and do not quote chlorophyll.**
+
+---
+
+> ## ⚠ CORRECTION 2 — "does anything actually FIT?", and an optimiser defect it exposed
+>
+> Everything below §2 originally quoted RANGES over an assumption sweep without ever
+> saying how well each arm fitted. Some fit far worse than others, and pooling them
+> produced a "spread" that was really a mixture of one surviving model and twenty
+> rejected ones. Figures `giop9_chi2_weighting.png`, and χ² now annotated on
+> `giop5` and `giop8`.
+>
+> ### 2a. No arm fits. Not one.
+>
+> Against the **measured** per-band uncertainty (median 1.9 % of R_rs):
+>
+> | | χ²_ν (ν = 298) | RMS misfit |
+> |---|---|---|
+> | best arm of all 24 (shapes free) | **18.1** | 8.5 % |
+> | GIOP default (S_dg = 0.018, OC4 seed) | **74.5** | 10.9 % |
+> | worst arm | **130.0** | 16.6 % |
+> | *a good fit* | *≈ 1* | *≈ 1.9 %* |
+>
+> So the honest answer to "do we ever get a really good fit" is **no — the best model in
+> the family still misfits by 4.5× the measurement uncertainty**. Every retrieved number
+> in this file is a projection of a spectrum onto a basis that cannot represent it.
+>
+> ### 2b. χ²-weighting collapses the spread rather than narrowing it
+>
+> Weighting by exp(−Δχ²/2ŝ) with errors inflated so the best arm has χ²_ν = 1
+> (Avni 1976 — the standard treatment when misfit is model inadequacy, not noise) still
+> puts **w = 1.000 on one arm and 0.000 on the other 23**. The gap to the next arm is
+> Δχ²_ν = 1.9 — which sounds small, but over 298 dof that is Δχ² = 566, and the gap to
+> the best *fixed-shape* arm is Δχ² = 15 500. The sweep is not an uncertainty band.
+> Cutting instead at a stated χ²_ν ≤ 2 × best (2 arms of 24 survive):
+>
+> | | unweighted range, as first reported | **admissible only** |
+> |---|---|---|
+> | M_φ | 0 → 41.2 | 0 → 2.26 |
+> | a_dg(443) | 0.779 → 1.481 | **0.779 → 0.822** |
+> | b_bp(443) | 0.0391 → 0.0843 | **0.0391 → 0.0430** |
+>
+> ### 2c. χ² cannot be used as a likelihood here, and the figure shows why
+>
+> The residual of the best fit has **lag-1 autocorrelation 0.9964 across 301 bands**. It
+> is one smooth curve — a +9σ lobe at 560–600 nm and a −20σ notch at 690 nm — not noise.
+> Under an AR(1) reading that is n_eff ≈ 0.5 independent points, i.e. the 301 bands
+> constrain the residual *shape* but contribute essentially one independent statement
+> about its size. **χ² here ranks models; it does not assign probabilities**, and the
+> ±2.2 % Monte-Carlo error bar in §Correction 1 is formal precision on a rejected model.
+> `giop6_all_fits.png` corroborates it directly: all 12 scans show the *same* misfit —
+> GIOP overshoots the 570 nm peak and inverts the 690 nm upturn in **every one**.
+>
+> ### 2d. S_dg IS determined by these data. §2.4 below is superseded.
+>
+> §2.4 says "S_dg is not measured, it is set to 0.018 by convention" and sweeps it to get
+> chlorophyll 0 → 297. That sweep is real, but it was run **without χ²**, and the arms at
+> its ends fit terribly. Mapping χ² over (S_dg, η) on a 34 × 34 grid:
+>
+> - **S_dg has a sharp interior minimum at 0.0113–0.0118 nm⁻¹**, χ²_ν 75 → 17. The
+>   contours are near-vertical: S_dg is the best-constrained parameter in the whole model.
+> - The GIOP default **0.018 is not the preferred value for this water**. 0.0115 is at the
+>   detritus-rich end of the usual 0.010–0.021 range, which is what a sediment-laden
+>   Arctic river mouth should look like.
+> - **η rails at the −1.0 bound** with a nearly flat χ² in that direction. Negative η
+>   means b_bp *rising* toward the red, which a Junge/Mie power law does not do. Read that
+>   as **the b_bp power-law form is wrong**, not as a measurement of η.
+>
+> Three estimates of S_dg appear across the figures and they agree; they differ only in
+> what else was free at the time, and the spread is the honest resolution on it:
+>
+> | | what is free | S_dg | χ²_ν |
+> |---|---|---|---|
+> | `giop5`, 16-node sweep | S_dg only, η from QAA per arm | 0.0130 | 24 |
+> | `giop9` panel b, 34×34 map | S_dg and η on a grid | 0.0113 | 17.2 |
+> | the solver, `fit_shapes=True` | S_dg and η, profiled | 0.0118 | 18.1 |
+>
+> The solver lands ~5 % off the grid minimum, so the profile's polish leaves a little on
+> the table; that is a real limitation of the implementation, not of the data.
+>
+> ### 2e. What this costs the headline numbers
+>
+> Fitting S_dg instead of assuming it moves the two "robust" parameters by more than any
+> assumption swept before: **a_dg(443) 1.254 → 0.779 (−38 %)** and
+> **b_bp(443) 0.0836 → 0.0430 (−49 %)**. The earlier recommendation to quote
+> a_dg = 1.25 ± 0.10 and b_bp = 0.085 ± 0.009 is therefore **withdrawn**: those are the
+> values conditional on S_dg = 0.018, and the data reject that S_dg. Quote
+> **a_dg(443) ≈ 0.78–0.82 m⁻¹** and **b_bp(443) ≈ 0.039–0.043 m⁻¹**, stating that they
+> come from the best-fitting arm of a family in which nothing fits.
+>
+> ### 2f. The defect this uncovered in our own package
+>
+> The first version of this analysis reported that freeing S_dg and η "RAILS both and
+> collapses every amplitude — the data cannot determine them", at χ²_ν = 2431. **That was
+> an optimiser failure, not a property of the data.** Freeing parameters cannot make the
+> optimum worse, because the fixed-shape solution is a point inside the free search box,
+> and 2431 against 74.5 is 33× worse. Three faults in six lines of
+> `giop.inversion._invert_fmin_shapes`: `n_starts` silently ignored, a single hardcoded
+> start at the upstream oligotrophic `[0.01, 0.001, chl]` (~100× off in two of five
+> coordinates on turbid water), and a `return 1e6` barrier ~10¹¹ above the cost at the
+> solution, onto which the simplex collapsed. Rewritten as a **profile** — amplitudes
+> solved exactly by the bounded trust-region solver at each trial (S_dg, η), only the two
+> shapes searched, the configured shapes always among the starts, so the returned cost is
+> ≤ the fixed-shape cost by construction. `tests/test_fit_shapes_guard.py` pins the
+> nesting property and fails 3.3× against the old solver. Suite 140 passed.
 
 > ## ⚠ CORRECTION, and it inverts part of what this file first said
 >
@@ -177,6 +282,10 @@ rather than for tuning GIOP.
 | u(λ), b_b/a | **yes** — measured, assumption-light |
 | R_rs shape | **yes** — 1.7 % |
 | R_rs magnitude | yes, with the 11 % environmental spread stated |
+| **S_dg** | **yes, as a retrieval** — 0.011–0.013 nm⁻¹, χ²_ν 74 → 17–24 against the assumed 0.018 (§2d) |
 | a(443), b_b(443) totals | with caution — conditional on the operator, ±25–35 % |
-| a_φ / a_dg **split** | **no** — 47 % on a 1.7 % input, and S_dg swings it 0→297 |
+| a_dg(443), b_bp(443) | **only from the admissible arms**: 0.78–0.82 and 0.039–0.043 m⁻¹, ~40 % below the fixed-S_dg values (§2e) |
+| a_φ / a_dg **split** | **no** — M_φ spans 0 → 41 across the sweep and 0 → 2.3 even among admissible arms |
 | chlorophyll | **no** — Case-1 algorithm on Case-2 water, factor-2.4 self-contradiction |
+| η | **no** — rails at the −1 bound; the b_bp power law is the wrong form here (§2d) |
+| any of it as a *good* fit | **no** — best χ²_ν is 18 against a 1.9 % measured uncertainty (§2a) |

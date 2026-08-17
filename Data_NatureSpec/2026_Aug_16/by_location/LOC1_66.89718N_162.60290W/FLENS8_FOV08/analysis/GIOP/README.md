@@ -55,3 +55,26 @@ amplitude spread, as it should — the scans are the same water at different con
 
 Full argument, including the correction where this was first run on 6 bands and the
 conditioning reported as GIOP's limit: `LOC1_GIOP_FINDINGS.md` at the repository root.
+
+---
+
+## giop9_chi2_weighting.png — added 2026-08-17
+
+Answers "do we ever get a really good fit, and shouldn't the spread be chi2-weighted?"
+
+**No, and yes-but.** Best arm of 24 is chi2_nu = 18 against a measured 1.9 % band
+uncertainty; the GIOP default is 74.5 and the worst 130. Chi2-weighting (Avni error
+inflation) puts w = 1.000 on one arm and 0.000 on the rest, so the previously quoted
+"range" over the sweep was pooling one surviving model with 23 rejected ones. The panels
+therefore quote an admissible set at a stated chi2_nu <= 2x best instead.
+
+Panel b is the load-bearing one: chi2 mapped over (S_dg, eta). Contours are near-vertical
+-- **S_dg is sharply determined at 0.0113, not the assumed 0.018** -- while eta is nearly
+flat and runs to its -1 bound. Panel c shows why chi2 cannot be a likelihood here: the
+residual has lag-1 rho = 0.9964, it is one smooth curve, not noise.
+
+chi2 is also now annotated on `giop5` (the S_dg sweep) and `giop8` (the assumption
+sweep), for the same reason.
+
+Consequence: a_dg(443) and b_bp(443) drop ~40 % and ~49 % from the fixed-shape values.
+See `../../../../../LOC1_GIOP_FINDINGS.md` Correction 2.

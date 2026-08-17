@@ -217,90 +217,472 @@ def f_uncertainty(wl, mean, ssd, chl, out, ndraw=150):
 
 
 # ------------------------------------------------------------------ figure 5
-def f_sdg(wl, mean, chl, out):
+def f_sdg(wl, mean, ssd, chl, out):
     m = (wl >= LO) & (wl <= HI)
+    S = ssd[m]
     sd = np.linspace(0.010, 0.025, 16)
-    fig, axes = plt.subplots(1, 3, figsize=(16, 5.0))
+    fig, axes = plt.subplots(1, 3, figsize=(16, 5.2))
+    hyp = None
     for lab, W, R, col in (("6 bands", B6, at(wl, mean, B6), "#c0392b"),
                            ("hyperspectral", wl[m], mean[m], "#2e7d32")):
         vals = []
         for s_ in sd:
             try:
                 g = run(W, R, chl, sdg=float(s_))
-                vals.append((g.chl, g.adg443, g.bbp443))
+                c2 = (_chi2(g, R, S)[0] / (len(W) - 3) if len(W) > 20 else np.nan)
+                vals.append((g.chl, g.adg443, g.bbp443, c2))
             except Exception:
-                vals.append((np.nan,) * 3)
+                vals.append((np.nan,) * 4)
         vals = np.array(vals)
+        if lab == "hyperspectral":
+            hyp = vals
         for ax, k in zip(axes, range(3)):
-            ax.plot(sd, vals[:, k], "o-", lw=2.2, ms=6, color=col, label=lab)
-    for ax, t in zip(axes, ("$M_\\phi$", "$a_{dg}$(443)  m$^{-1}$",
-                            "$b_{bp}$(443)  m$^{-1}$")):
+            ax.plot(sd, vals[:, k], "-", lw=1.6, color=col, label=lab, zorder=1)
+            if lab == "hyperspectral":
+                ax.scatter(sd, vals[:, k], c=vals[:, 3], cmap="viridis_r", s=80,
+                           zorder=3, edgecolor="k", linewidth=0.5,
+                           norm=matplotlib.colors.LogNorm())
+            else:
+                ax.plot(sd, vals[:, k], "o", ms=5, color=col, zorder=2)
+    b = int(np.nanargmin(hyp[:, 3]))
+    for ax, t, k in zip(axes, ("$M_\\phi$", "$a_{dg}$(443)  m$^{-1}$",
+                               "$b_{bp}$(443)  m$^{-1}$"), range(3)):
         ax.axvline(0.018, color="#333", ls="--", lw=1.5)
-        ax.text(0.0182, ax.get_ylim()[1] * 0.9, "default\n0.018", fontsize=8.5)
-        ax.set_xlabel("$S_{dg}$  (nm$^{-1}$)  — ASSUMED, never measured")
+        ax.plot(sd[b], hyp[b, k], "*", ms=20, color="#ff2d55", mec="k", zorder=5)
+        ax.set_xlabel("$S_{dg}$  (nm$^{-1}$)")
         ax.set_ylabel(t); ax.set_yscale("symlog", linthresh=1e-2)
-        ax.grid(alpha=0.25); ax.legend(fontsize=9)
-    fig.suptitle("$S_{dg}$ is a CONSTANT NOBODY MEASURED. Sweeping it over its ordinary "
-                 "range is the largest single source of error in the retrieval,\n"
-                 "and hyperspectral tames it but does not remove it.", fontsize=11.5)
+        ax.grid(alpha=0.25); ax.legend(fontsize=9, loc="upper left")
+        ax.set_title("colour = $\\chi^2_\\nu$ (hyperspectral). BEST at $S_{dg}$=%.4f, "
+                     "$\\chi^2_\\nu$=%.0f;\nthe default 0.018 gives %.0f."
+                     % (sd[b], hyp[b, 3], hyp[np.argmin(abs(sd - 0.018)), 3]),
+                     fontsize=9, loc="left")
+    plt.colorbar(axes[-1].collections[0], ax=axes[-1], label="$\\chi^2_\\nu$")
+    fig.suptitle("$S_{dg}$ IS NOT A FREE CHOICE — the data prefer one. Sweeping it moves "
+                 "$M_\\phi$ over orders of magnitude, but the extreme arms FIT BADLY,\n"
+                 "so that swing is a set of rejected models, not an error bar. The "
+                 "GIOP default 0.018 is not the preferred value here.", fontsize=11.5)
     fig.tight_layout(rect=(0, 0, 1, 0.88))
     p = os.path.join(out, "giop5_sdg_assumption.png")
     fig.savefig(p, dpi=140); plt.close(fig)
     return p
 
 
-def f_perscan(loc, chl, out):
-    """GIOP on EVERY angle-matched scan, not only the mean.
-
-    The mean shape is the product, but each scan is an independent realisation of the
-    same water at a different concentration, so fitting all twelve shows how much of the
-    retrieved IOP spread is the amplitude term and how much is anything else.
-    """
+def _perscan_fits(loc, chl):
+    """GIOP on each angle-matched pair, keeping the spectra and the IOPs."""
     from analyse_location import match_by_angle
     from fieldrrs.rrs import rho_at_angle, rrs_three_scan, view_zenith_from_tilt
     from organize_by_location import survey
+    from giop.model import (GiopConfig, GORDON_G0, GORDON_G1, eigenvectors,
+                            find_anchor_bands, rrs_above_to_below, rrs_from_iops,
+                            u_from_rrs)
     scans = survey(loc)
     sky = [s for s in scans if s["role"] == "sky"]
     water = [s for s in scans if s["role"] == "water"]
     wl = np.array(scans[0]["spec"].wavelength)
-    m = (wl >= LO) & (wl <= HI)
-    rows = []
+    m = (wl >= LO) & (wl <= HI); W = wl[m]
+    cfg = GiopConfig(); out = []
     for w, sk, dm, _ in match_by_angle(water, sky):
-        r = rho_at_angle(view_zenith_from_tilt(w["spec"].tilt_y_deg))
+        rho = rho_at_angle(view_zenith_from_tilt(w["spec"].tilt_y_deg))
         v = np.array(rrs_three_scan(wl, w["spec"].columns["rad_target"],
                                     sk["spec"].columns["rad_target"],
-                                    w["spec"].columns["rad_ref"], 0.99, r,
-                                    "none").rrs)
+                                    w["spec"].columns["rad_ref"], 0.99, rho,
+                                    "none").rrs)[m]
         try:
-            g = run(wl[m], v[m], chl)
-            rows.append({"n": w["n"], "sky": sk["n"], "dm": dm, "M": g.chl,
-                         "adg": g.adg443, "bbp": g.bbp443,
-                         "r555": float(v[np.argmin(abs(wl - 555))]), "ok": not g.failed})
+            g = run(W, v, chl)
+            rin = rrs_above_to_below(v, cfg.trans)
+            idx = find_anchor_bands(W)
+            adgs, bbps, aphs, sdg, eta = eigenvectors(W, cfg, chl, v, rin, idx)
+            Mdg, Mbp, Mphi = g.x
+            rmod = rrs_from_iops(a_water(W) + Mphi * aphs + Mdg * adgs,
+                                 bb_water(W) + Mbp * bbps, GORDON_G0, GORDON_G1)
+            out.append({"n": w["n"], "sky": sk["n"], "dm": dm, "W": W, "rrs": v,
+                        "rin": rin, "rmod": rmod, "M": g.chl, "adg": g.adg443,
+                        "bbp": g.bbp443, "eta": eta,
+                        "rms": 100 * float(np.sqrt(np.mean((rmod / rin - 1) ** 2))),
+                        "amp": float(v[int(np.argmin(abs(W - 555)))]), "ok": True})
         except Exception:
-            rows.append({"n": w["n"], "sky": sk["n"], "dm": dm, "M": np.nan,
-                         "adg": np.nan, "bbp": np.nan, "r555": np.nan, "ok": False})
-    good = [r for r in rows if r["ok"]]
-    fig, axes = plt.subplots(1, 3, figsize=(16, 5.0))
-    names = [r["n"] for r in good]
-    for ax, k, t, col in ((axes[0], "M", "$M_\\phi$", "#2e7d32"),
-                          (axes[1], "adg", "$a_{dg}$(443)  m$^{-1}$", "#8a6000"),
-                          (axes[2], "bbp", "$b_{bp}$(443)  m$^{-1}$", "#2c6f9b")):
-        v = np.array([r[k] for r in good])
-        ax.bar(range(len(v)), v, color=col)
-        ax.axhline(v.mean(), color="k", ls="--", lw=1.5)
+            pass
+    return out
+
+
+# ------------------------------------------------------------------ figure 6
+def f_perscan(loc, chl, out):
+    """All twelve fits, spectrum by spectrum."""
+    fits = _perscan_fits(loc, chl)
+    n = len(fits)
+    fig, axes = plt.subplots(3, 4, figsize=(17, 10.5), sharex=True)
+    for ax, f in zip(axes.flat, fits):
+        ax.plot(f["W"], f["rin"], lw=1.8, color="#1f7a99", label="measured")
+        ax.plot(f["W"], f["rmod"], lw=1.6, ls="--", color="#c0392b", label="GIOP")
+        ax.set_title("water %s + sky %s   $\\Delta\\theta$=%.1f$^\\circ$\n"
+                     "$M_\\phi$=%.1f  $a_{dg}$=%.2f  $b_{bp}$=%.3f   RMS %.1f %%"
+                     % (f["n"], f["sky"], f["dm"], f["M"], f["adg"], f["bbp"],
+                        f["rms"]), fontsize=8.5, loc="left")
+        ax.grid(alpha=0.25); ax.tick_params(labelsize=8)
+    for ax in axes.flat[n:]:
+        ax.axis("off")
+    axes[0][0].legend(fontsize=8)
+    for ax in axes[-1]:
+        ax.set_xlabel("wavelength (nm)")
+    for row in axes:
+        row[0].set_ylabel("$r_{rs}$ below surface")
+    fig.suptitle("All %d angle-matched fits, hyperspectral 400-700 nm.   "
+                 "$S_{dg}$ FIXED at 0.018, $\\eta$ DERIVED from each spectrum by QAA, "
+                 "only the three amplitudes are free." % n, fontsize=12.5)
+    fig.tight_layout(rect=(0, 0, 1, 0.955))
+    p = os.path.join(out, "giop6_all_fits.png")
+    fig.savefig(p, dpi=135); plt.close(fig)
+    return p, fits
+
+
+# ------------------------------------------------------------------ figure 7
+def f_covariance(fits, out):
+    """Every parameter, and how they trade off against each other."""
+    keys = ["M", "adg", "bbp", "eta", "rms", "amp"]
+    lab = {"M": "$M_\\phi$", "adg": "$a_{dg}$(443)", "bbp": "$b_{bp}$(443)",
+           "eta": "$\\eta$ (derived)", "rms": "fit RMS %", "amp": "$R_{rs}$(555)"}
+    D = {k: np.array([f[k] for f in fits]) for k in keys}
+    names = [f["n"] for f in fits]
+
+    fig = plt.figure(figsize=(17, 9.5))
+    # --- top: every parameter per scan
+    for j, k in enumerate(keys):
+        ax = fig.add_subplot(2, 6, j + 1)
+        v = D[k]
+        ax.bar(range(len(v)), v, color="#2c6f9b")
+        ax.axhline(v.mean(), color="k", ls="--", lw=1.3)
         ax.set_xticks(range(len(v)))
-        ax.set_xticklabels(["%s/%s" % (r["n"], r["sky"]) for r in good], rotation=70,
-                           fontsize=7)
-        ax.set_ylabel(t); ax.grid(alpha=0.25, axis="y")
-        ax.set_title("%s per scan\nmean %.4g, sd %.0f %%"
-                     % (t, v.mean(), 100 * v.std() / abs(v.mean())), fontsize=10.5,
-                     loc="left")
-    fig.suptitle("GIOP on each angle-matched water/sky pair (hyperspectral 400-700 nm)"
-                 " — labels are water/sky", fontsize=12)
-    fig.tight_layout(rect=(0, 0, 1, 0.90))
-    p = os.path.join(out, "giop6_per_scan.png")
-    fig.savefig(p, dpi=140); plt.close(fig)
-    return p, rows
+        ax.set_xticklabels(names, rotation=90, fontsize=6)
+        ax.set_title("%s\n%.4g ± %.0f %%" % (lab[k], v.mean(),
+                                              100 * v.std() / abs(v.mean())),
+                     fontsize=9.5)
+        ax.grid(alpha=0.25, axis="y"); ax.tick_params(labelsize=7)
+
+    # --- bottom left: correlation matrix
+    ax = fig.add_subplot(2, 3, 4)
+    M = np.corrcoef(np.array([D[k] for k in keys]))
+    im = ax.imshow(M, cmap="RdBu_r", vmin=-1, vmax=1)
+    ax.set_xticks(range(len(keys))); ax.set_yticks(range(len(keys)))
+    ax.set_xticklabels([lab[k] for k in keys], rotation=45, ha="right", fontsize=8.5)
+    ax.set_yticklabels([lab[k] for k in keys], fontsize=8.5)
+    for i_ in range(len(keys)):
+        for j_ in range(len(keys)):
+            ax.text(j_, i_, "%+.2f" % M[i_, j_], ha="center", va="center", fontsize=8,
+                    color="white" if abs(M[i_, j_]) > 0.6 else "black")
+    plt.colorbar(im, ax=ax, fraction=0.046)
+    ax.set_title("CROSS-CORRELATION across the %d scans\n"
+                 "strong off-diagonal = the parameters trade off" % len(fits),
+                 fontsize=10.5, loc="left")
+
+    # --- bottom middle: the key trade-off
+    ax = fig.add_subplot(2, 3, 5)
+    ax.scatter(D["adg"], D["M"], s=90, c=D["amp"], cmap="viridis",
+               edgecolor="k", linewidth=0.5)
+    for x_, y_, n_ in zip(D["adg"], D["M"], names):
+        ax.annotate(n_, (x_, y_), fontsize=7, xytext=(4, 4),
+                    textcoords="offset points")
+    r = np.corrcoef(D["adg"], D["M"])[0, 1]
+    ax.set_xlabel("$a_{dg}$(443)  m$^{-1}$"); ax.set_ylabel("$M_\\phi$")
+    ax.grid(alpha=0.25)
+    ax.set_title("THE degeneracy: $a_{dg}$ vs $a_\\phi$\nr = %+.2f  "
+                 "(both rise toward the blue)" % r, fontsize=10.5, loc="left")
+    plt.colorbar(ax.collections[0], ax=ax, label="$R_{rs}$(555)")
+
+    # --- bottom right: what amplitude drives
+    ax = fig.add_subplot(2, 3, 6)
+    for k, col in (("M", "#2e7d32"), ("adg", "#8a6000"), ("bbp", "#2c6f9b")):
+        y = D[k] / D[k].mean()
+        r = np.corrcoef(D["amp"], D[k])[0, 1]
+        ax.scatter(D["amp"], y, s=70, color=col, edgecolor="k", linewidth=0.4,
+                   label="%s   r=%+.2f" % (lab[k], r))
+    ax.set_xlabel("$R_{rs}$(555)  sr$^{-1}$  (the amplitude term)")
+    ax.set_ylabel("parameter / its mean")
+    ax.legend(fontsize=9); ax.grid(alpha=0.25)
+    ax.set_title("Which parameter absorbs the concentration change?",
+                 fontsize=10.5, loc="left")
+    fig.suptitle("Per-scan parameters and their covariance — $S_{dg}$ fixed, "
+                 "$\\eta$ derived, three amplitudes free", fontsize=12.5)
+    fig.tight_layout(rect=(0, 0, 1, 0.95))
+    p = os.path.join(out, "giop7_covariance.png")
+    fig.savefig(p, dpi=135); plt.close(fig)
+    return p, D, names
+
+
+# ------------------------------------------------------------------ figure 8
+def f_assumption_free(loc, wl, mean, ssd, oc4, out):
+    """Fig 3/4/6 redone WITHOUT trusting OC4, and with the shapes freed.
+
+    Three assumptions are stripped one at a time and the answer watched:
+
+      the OC4 chlorophyll INPUT  -- it only selects the Bricaud a*_phi SHAPE, but it is
+                                    derived from a Case-1 band ratio on Case-2 water
+      the a*_phi FAMILY          -- Ciotti 2006 is parameterised by particle SIZE and
+                                    needs no chlorophyll at all
+      S_dg and eta               -- freed via fit_shapes on the fmin path
+
+    The result separates what survives from what does not, which is more useful than a
+    single retrieval with error bars.
+    """
+    import warnings
+    warnings.filterwarnings("ignore")
+    m = (wl >= LO) & (wl <= HI); W, R, S = wl[m], mean[m], ssd[m]
+
+    sig = np.sqrt((0.05 * np.abs(R)) ** 2 + 2e-4 ** 2)
+    nu = len(W) - 3
+
+    chls = np.array([0.5, 1, 2, 3, 5, 8, oc4, 15, 20, 30, 50])
+    A = []
+    for c in chls:
+        g = run(W, R, float(c))
+        A.append((g.chl, g.adg443, g.bbp443, _chi2(g, R, S)[0] / nu))
+    A = np.array(A)
+
+    sfs = np.linspace(0.0, 1.0, 11)
+    B = []
+    for sf in sfs:
+        g = run(W, R, oc4, aph="ciotti", sf=float(sf))
+        B.append((g.chl, g.adg443, g.bbp443, _chi2(g, R, S)[0] / nu))
+    B = np.array(B)
+
+    free = {}
+    for lab, kw in (("Bricaud", dict(aph="bricaud")),
+                    ("Ciotti sf=0.5", dict(aph="ciotti", sf=0.5))):
+        g = giop(W, R, oc4, inv="bounded", sigma=sig, fit_shapes=True, n_starts=4, **kw)
+        free[lab] = (g.chl, g.adg443, g.bbp443, g.sdg, g.eta, _chi2(g, R, S)[0] / nu)
+
+    fig, axes = plt.subplots(2, 3, figsize=(17, 9.8))
+    for j, (t, col) in enumerate((("$M_\\phi$", "#2e7d32"),
+                                  ("$a_{dg}$(443)  m$^{-1}$", "#8a6000"),
+                                  ("$b_{bp}$(443)  m$^{-1}$", "#2c6f9b"))):
+        ax = axes[0][j]
+        ax.plot(chls, A[:, j], "-", lw=1.4, color=col, zorder=1)
+        s = ax.scatter(chls, A[:, j], c=A[:, 3], cmap="viridis_r", s=95, zorder=3,
+                       edgecolor="k", linewidth=0.5,
+                       norm=matplotlib.colors.LogNorm())
+        plt.colorbar(s, ax=ax, label="$\\chi^2_\\nu$")
+        ax.axvline(oc4, color="#c0392b", ls="--", lw=1.6)
+        ax.set_xscale("log"); ax.set_xlabel("chlorophyll INPUT (mg m$^{-3}$)")
+        ax.set_ylabel(t); ax.grid(alpha=0.25)
+        b = int(np.argmin(A[:, 3]))
+        ax.plot(chls[b], A[b, j], "*", ms=19, color="#ff2d55", mec="k", zorder=4)
+        ax.set_title("%s vs the OC4 input.  range %.3g to %.3g\n"
+                     "best-fitting arm (star) is chl$_{in}$=%.3g at $\\chi^2_\\nu$=%.0f"
+                     % (t, A[:, j].min(), A[:, j].max(), chls[b], A[b, 3]),
+                     fontsize=9, loc="left")
+
+        ax = axes[1][j]
+        ax.plot(sfs, B[:, j], "-", lw=1.4, color=col, zorder=1)
+        s = ax.scatter(sfs, B[:, j], c=B[:, 3], cmap="viridis_r", s=95, zorder=3,
+                       edgecolor="k", linewidth=0.5,
+                       norm=matplotlib.colors.LogNorm())
+        plt.colorbar(s, ax=ax, label="$\\chi^2_\\nu$")
+        ax.set_xlabel("Ciotti size factor $S_f$  (NO chlorophyll input)")
+        ax.set_ylabel(t); ax.grid(alpha=0.25)
+        for k, (lab, v) in enumerate(free.items()):
+            c_ = ["#c0392b", "#6a3d9a"][k]
+            ax.axhline(v[j], color=c_, ls=":", lw=1.8)
+            ax.text(0.02, v[j], "shapes FREE (%s), $\\chi^2_\\nu$=%.0f" % (lab, v[5]),
+                    fontsize=7.5, color=c_, va="bottom")
+        ax.set_title("%s vs the a*$_\\phi$ family, and with the shapes freed"
+                     % t, fontsize=9, loc="left")
+    fig.suptitle("STRIPPING THE ASSUMPTIONS — every point now carries its $\\chi^2_\\nu$, "
+                 "because a range that pools good and bad fits is not an uncertainty.\n"
+                 "Freeing $S_{dg}$ and $\\eta$ is the BEST-FITTING arm of all "
+                 "($\\chi^2_\\nu$ %.0f vs %.0f at the GIOP default) and it moves "
+                 "$a_{dg}$ and $b_{bp}$ by %.0f %% and %.0f %%."
+                 % (free["Bricaud"][5], A[np.argmin(abs(chls - oc4)), 3],
+                    100 * abs(free["Bricaud"][1] / A[np.argmin(abs(chls - oc4)), 1] - 1),
+                    100 * abs(free["Bricaud"][2] / A[np.argmin(abs(chls - oc4)), 2] - 1)),
+                 fontsize=11.5)
+    fig.tight_layout(rect=(0, 0, 1, 0.92))
+    p = os.path.join(out, "giop8_assumption_free.png")
+    fig.savefig(p, dpi=135); plt.close(fig)
+    return p, A, B, free, chls, sfs
+
+
+
+def _chi2(g, R, S):
+    """chi2 of a fit against the MEASURED per-band uncertainty, above water.
+
+    Not `g.cost`: that is the solver's own objective on the subsurface scale, with
+    whatever sigma it was handed. This is one statistic, comparable across every arm.
+    """
+    r = (g.rrs_model_above - R) / S
+    return float(np.sum(r ** 2)), float(np.corrcoef(r[:-1], r[1:])[0, 1])
+
+
+def _amp_solve(W, R, sdg, eta, chl, cfg=None):
+    """The three amplitudes at a PRESCRIBED (S_dg, eta), plus chi2. For the chi2 map."""
+    from giop.inversion import _invert_bounded
+    from giop.model import rrs_below_to_above
+    cfg = cfg or GiopConfig()
+    rin = rrs_above_to_below(R, cfg.trans)
+    _, _, aphs, _, _ = eigenvectors(W, cfg, chl, R, rin, find_anchor_bands(W))
+    aw, bbw = a_water(W), bb_water(W)
+    sig = np.sqrt((0.05 * np.abs(R)) ** 2 + 2e-4 ** 2)
+    adgs = np.exp(-sdg * (W - 443.0))
+    bbps = (443.0 / W) ** eta
+    x, ok, _, _, _ = _invert_bounded(rin, aw, bbw, adgs, bbps, aphs, GORDON_G0,
+                                     GORDON_G1, chl, sigma=sig * rin / R)
+    rm = rrs_from_iops(aw + adgs * x[0] + aphs * x[2], bbw + bbps * x[1],
+                       GORDON_G0, GORDON_G1)
+    return x, rrs_below_to_above(rm, cfg.trans)
+
+
+# ------------------------------------------------------------------ figure 9
+def f_chi2(wl, mean, ssd, oc4, out):
+    """Does ANY arm actually fit, and what does chi2-weighting the spread give?
+
+    Written because the assumption sweep in figure 8 quoted a range of answers without
+    ever saying how well each one fitted. Some of them fit far worse than others, and a
+    range that pools a chi2_nu of 18 with a chi2_nu of 130 is not an uncertainty.
+    """
+    import warnings
+    warnings.filterwarnings("ignore")
+    m = (wl >= LO) & (wl <= HI)
+    W, R, S = wl[m], mean[m], ssd[m]
+    n = len(W)
+    nu = n - 3
+
+    # ---- every arm, with its chi2
+    arms = []
+    for c in [0.5, 1, 2, 3, 5, 8, oc4, 15, 20, 30, 50]:
+        g = run(W, R, float(c))
+        c2, _ = _chi2(g, R, S)
+        arms.append(("OC4 input %.3g" % c, "chl", c2, g.chl, g.adg443, g.bbp443,
+                     0.018, g.eta))
+    for sf in np.linspace(0, 1, 11):
+        g = run(W, R, oc4, aph="ciotti", sf=float(sf))
+        c2, _ = _chi2(g, R, S)
+        arms.append(("Ciotti sf=%.1f" % sf, "sf", c2, g.chl, g.adg443, g.bbp443,
+                     0.018, g.eta))
+    sig = np.sqrt((0.05 * np.abs(R)) ** 2 + 2e-4 ** 2)
+    for lab, kw in (("Bricaud", dict(aph="bricaud")),
+                    ("Ciotti sf=0.5", dict(aph="ciotti", sf=0.5))):
+        g = giop(W, R, oc4, inv="bounded", sigma=sig, fit_shapes=True, n_starts=4, **kw)
+        c2, _ = _chi2(g, R, S)
+        arms.append(("shapes FREE (%s)" % lab, "free", c2, g.chl, g.adg443, g.bbp443,
+                     g.sdg, g.eta))
+    C = np.array([a[2] for a in arms])
+    c2min = C.min()
+
+    # ---- residual autocorrelation of the BEST arm: is chi2 a likelihood here?
+    gb = run(W, R, oc4)
+    resid = (gb.rrs_model_above - R) / S
+    rho1 = float(np.corrcoef(resid[:-1], resid[1:])[0, 1])
+    neff = n * (1 - rho1) / (1 + rho1)
+
+    # ---- chi2 weights. The best fit is chi2_nu = %.0f, so exp(-dchi2/2) on the RAW
+    # chi2 would put every gram of weight on one arm. Errors are inflated so the best
+    # arm has chi2_nu = 1 (Avni 1976), which is the standard treatment when the misfit
+    # is dominated by model inadequacy rather than by noise.
+    infl = c2min / nu
+    wgt = np.exp(-(C - c2min) / (2.0 * infl))
+    wgt /= wgt.sum()
+    # Even inflated, this collapses onto one arm: the gap between the best and the next
+    # is dchi2_nu ~ 50 over 298 dof. That is the honest answer -- the sweep is mostly
+    # REJECTED models, not alternatives -- but a delta-chi2 band is more useful to read
+    # off, so an "admissible" set is carried alongside at a stated, arbitrary factor.
+    adm = C <= 2.0 * c2min
+
+    fig = plt.figure(figsize=(17.5, 10.5))
+    col = {"chl": "#2e7d32", "sf": "#8a6000", "free": "#c0392b"}
+
+    # (a) ranked chi2_nu
+    ax = fig.add_subplot(2, 3, 1)
+    o = np.argsort(C)[::-1]
+    ax.barh(range(len(o)), C[o] / nu, color=[col[arms[i][1]] for i in o])
+    ax.set_yticks(range(len(o)))
+    ax.set_yticklabels([arms[i][0] for i in o], fontsize=6.5)
+    ax.set_xscale("log"); ax.set_xlabel("$\\chi^2_\\nu$   ($\\nu$ = %d)" % nu)
+    ax.axvline(1.0, color="k", lw=2.0)
+    ax.text(1.15, 0.5, "a GOOD fit\nwould be here", fontsize=8, rotation=90,
+            va="center")
+    ax.set_title("NOTHING FITS. Best $\\chi^2_\\nu$ = %.0f, worst %.0f.\n"
+                 "The measured band uncertainty is %.1f %%; the best arm misfits by "
+                 "%.1f %%." % (c2min / nu, C.max() / nu, 100 * np.median(S / R),
+                               100 * np.sqrt(np.mean(((gb.rrs_model_above - R) / R) ** 2))),
+                 fontsize=9.5, loc="left")
+    ax.grid(alpha=0.25, axis="x")
+
+    # (b) the chi2 surface over the two SHAPE parameters
+    ax = fig.add_subplot(2, 3, 2)
+    sd = np.linspace(0.006, 0.028, 34)
+    et = np.linspace(-1.0, 2.0, 34)
+    Z = np.empty((len(et), len(sd)))
+    for i, e in enumerate(et):
+        for j, s_ in enumerate(sd):
+            _, mod = _amp_solve(W, R, float(s_), float(e), oc4)
+            Z[i, j] = np.sum(((mod - R) / S) ** 2) / nu
+    im = ax.pcolormesh(sd, et, np.log10(Z), cmap="viridis_r", shading="auto")
+    plt.colorbar(im, ax=ax, label="$\\log_{10}\\,\\chi^2_\\nu$")
+    k = np.unravel_index(np.argmin(Z), Z.shape)
+    ax.plot(sd[k[1]], et[k[0]], "*", ms=20, color="#ff2d55", mec="k",
+            label="free minimum  %.4f, %+.2f" % (sd[k[1]], et[k[0]]))
+    ax.plot(0.018, gb.eta, "o", ms=11, color="w", mec="k",
+            label="GIOP default  0.0180, %+.2f" % gb.eta)
+    ax.set_xlabel("$S_{dg}$  (nm$^{-1}$)"); ax.set_ylabel("$\\eta$")
+    ax.legend(fontsize=7.5, loc="upper right")
+    ax.set_title("Contours are VERTICAL: $S_{dg}$ is sharply determined (interior "
+                 "minimum at\n%.4f, not the assumed 0.018, $\\chi^2_\\nu$ %.0f $\\to$ "
+                 "%.0f); $\\eta$ is nearly flat and runs to its bound."
+                 % (sd[k[1]], Z[np.argmin(abs(et - gb.eta)), np.argmin(abs(sd - 0.018))],
+                    Z.min()), fontsize=9.5, loc="left")
+
+    # (c) the residual, and why chi2 is not a likelihood here
+    ax = fig.add_subplot(2, 3, 3)
+    ax.plot(W, resid, lw=1.6, color="#c0392b", label="GIOP default")
+    xf, modf = _amp_solve(W, R, sd[k[1]], et[k[0]], oc4)
+    ax.plot(W, (modf - R) / S, lw=1.6, color="#2e7d32", label="shapes free")
+    ax.axhline(0, color="k", lw=0.8)
+    for y in (-1, 1):
+        ax.axhline(y, color="k", ls=":", lw=1.0)
+    ax.set_xlabel("wavelength (nm)"); ax.set_ylabel("residual / $\\sigma$")
+    ax.legend(fontsize=8.5); ax.grid(alpha=0.25)
+    ax.set_title("The residual is ONE SMOOTH CURVE, not noise.\n"
+                 "lag-1 $\\rho$ = %.4f over %d bands $\\Rightarrow$ $n_{eff}$ = %.1f. "
+                 "So $\\chi^2$ RANKS arms;\nit does not measure a probability."
+                 % (rho1, n, neff), fontsize=9.5, loc="left")
+
+    # (d-f) unweighted vs chi2-weighted spread
+    P = np.array([[a[3], a[4], a[5]] for a in arms])
+    for j, (t, c_) in enumerate((("$M_\\phi$", "#2e7d32"),
+                                 ("$a_{dg}$(443)  m$^{-1}$", "#8a6000"),
+                                 ("$b_{bp}$(443)  m$^{-1}$", "#2c6f9b"))):
+        ax = fig.add_subplot(2, 3, 4 + j)
+        v = P[:, j]
+        sc = ax.scatter(C / nu, v, s=30 + 900 * wgt, c=[col[a[1]] for a in arms],
+                        edgecolor="k", linewidth=0.5, zorder=3)
+        ax.set_xscale("log"); ax.set_xlabel("$\\chi^2_\\nu$ of that arm")
+        ax.set_ylabel(t); ax.grid(alpha=0.25)
+        mu = float(np.sum(wgt * v))
+        ax.axhspan(v[adm].min(), v[adm].max(), color="#ff2d55", alpha=0.18, zorder=0)
+        ax.axhline(mu, color="#ff2d55", lw=2.0, zorder=1)
+        ax.axhline(v.min(), color="k", ls=":", lw=1.0)
+        ax.axhline(v.max(), color="k", ls=":", lw=1.0)
+        ax.axvline(2.0 * c2min / nu, color="#ff2d55", ls="--", lw=1.4)
+        ax.set_title("unweighted range (dotted) %.3g to %.3g   <- pools "
+                     "REJECTED models\nadmissible ($\\chi^2_\\nu\\leq2\\times$best, "
+                     "%d of %d arms, band): %.3g to %.3g"
+                     % (v.min(), v.max(), int(adm.sum()), len(v),
+                        v[adm].min(), v[adm].max()),
+                     fontsize=8.5, loc="left")
+
+    fig.suptitle("CHI-SQUARED WEIGHTING THE ASSUMPTION SWEEP. Weights are "
+                 "$\\exp(-\\Delta\\chi^2/2\\hat{s})$, errors inflated by "
+                 "$\\hat{s}=\\chi^2_{\\nu,min}$ = %.0f (Avni 1976) since the misfit is "
+                 "model inadequacy, not noise.\nEVEN SO ONE ARM TAKES w = 1.000: the gap "
+                 "to the next is $\\Delta\\chi^2$ = %.0f, and %.0f to the best "
+                 "FIXED-shape arm, over %d dof. The sweep is a set of REJECTED models,\n"
+                 "not an uncertainty band — so the panels below quote a stated "
+                 "$\\chi^2_\\nu\\leq2\\times$best cut instead."
+                 % (c2min / nu, np.sort(C)[1] - c2min,
+                    C[np.array([a_[1] != "free" for a_ in arms])].min() - c2min, nu),
+                 fontsize=11.5)
+    fig.tight_layout(rect=(0, 0, 1, 0.92))
+    p = os.path.join(out, "giop9_chi2_weighting.png")
+    fig.savefig(p, dpi=135); plt.close(fig)
+    return p, arms, C, wgt, nu, rho1, neff, (sd[k[1]], et[k[0]], Z.min()), adm
 
 
 def main():
@@ -320,8 +702,44 @@ def main():
     p, chl2, X, which = f_oc4(wl, mean, a.out); ps.append(p)
     ps.append(f_fit(wl, mean, chl, a.out))
     p, store = f_uncertainty(wl, mean, ssd, chl, a.out); ps.append(p)
-    ps.append(f_sdg(wl, mean, chl, a.out))
-    p, per = f_perscan(loc, chl, a.out); ps.append(p)
+    ps.append(f_sdg(wl, mean, ssd, chl, a.out))
+    p, fits = f_perscan(loc, chl, a.out); ps.append(p)
+    p, D, names = f_covariance(fits, a.out); ps.append(p)
+    p, A, Bc, free, chls, sfs = f_assumption_free(loc, wl, mean, ssd, chl, a.out)
+    ps.append(p)
+    p, arms, C, wgt, nu, rho1, neff, best, adm = f_chi2(wl, mean, ssd, chl, a.out)
+    ps.append(p)
+    print("\nDOES ANYTHING FIT?  nu = %d" % nu)
+    print("   best chi2_nu %.1f, worst %.1f  -- a good fit would be ~1"
+          % (C.min() / nu, C.max() / nu))
+    print("   residual lag-1 rho = %.4f over %d bands -> n_eff = %.1f"
+          % (rho1, nu + 3, neff))
+    print("   free-shape minimum: S_dg=%.4f eta=%+.3f  chi2_nu=%.1f" % best)
+    print("   ranked arms:")
+    for i in np.argsort(C):
+        print("      %-22s chi2_nu=%8.1f  w=%.4f  M_phi=%8.3f adg=%6.3f bbp=%7.4f"
+              % (arms[i][0], C[i] / nu, wgt[i], arms[i][3], arms[i][4], arms[i][5]))
+    for j, t in enumerate(("M_phi", "adg443", "bbp443")):
+        v = np.array([a_[3 + j] for a_ in arms])
+        print("   %-8s unweighted %.4g to %.4g   ADMISSIBLE (chi2_nu <= 2x best, "
+              "%d/%d arms) %.4g to %.4g"
+              % (t, v.min(), v.max(), int(adm.sum()), len(v),
+                 v[adm].min(), v[adm].max()))
+    print("\nASSUMPTION STRIPPING")
+    print("   %-34s %10s %10s %10s" % ("", "M_phi", "adg443", "bbp443"))
+    print("   %-34s %9.3g- %9.3g- %9.4g-" % ("OC4 input swept 0.5-50", A[:,0].min(),
+                                             A[:,1].min(), A[:,2].min()))
+    print("   %-34s %9.3g  %9.3g  %9.4g" % ("   to", A[:,0].max(), A[:,1].max(),
+                                            A[:,2].max()))
+    print("   %-34s %9.3g- %9.3g- %9.4g-" % ("Ciotti S_f swept 0-1", Bc[:,0].min(),
+                                             Bc[:,1].min(), Bc[:,2].min()))
+    print("   %-34s %9.3g  %9.3g  %9.4g" % ("   to", Bc[:,0].max(), Bc[:,1].max(),
+                                            Bc[:,2].max()))
+    for lab, v in free.items():
+        print("   %-34s %9.3g  %9.3g  %9.4g   S_dg=%.4f (interior) eta=%.4f "
+              "(RAILED at the -1 bound)   chi2_nu=%.1f"
+              % ("S_dg,eta FREE (%s)" % lab, v[0], v[1], v[2], v[3], v[4], v[5]))
+    per = fits
     # the explainer infographic belongs with the fits it explains
     import shutil
     src = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "giop_python",
@@ -341,19 +759,21 @@ def main():
               % (lab, 100 * v[:, 0].std() / abs(v[:, 0].mean()),
                  100 * v[:, 1].std() / abs(v[:, 1].mean()),
                  100 * v[:, 2].std() / abs(v[:, 2].mean())))
-    good = [r for r in per if r["ok"]]
+    good = per
     print("\nper-scan (angle-matched pairs), hyperspectral:")
     print("   %-7s %-6s %6s %10s %10s %10s" % ("water", "sky", "dtilt", "M_phi",
                                                "adg443", "bbp443"))
     for r in good:
-        print("   %-7s %-6s %6.1f %10.3f %10.3f %10.4f"
-              % (r["n"], r["sky"], r["dm"], r["M"], r["adg"], r["bbp"]))
+        print("   %-7s %-6s %6.1f %10.3f %10.3f %10.4f  eta=%.3f RMS=%.1f%%"
+              % (r["n"], r["sky"], r["dm"], r["M"], r["adg"], r["bbp"], r["eta"],
+                 r["rms"]))
     for k, t in (("M", "M_phi"), ("adg", "adg443"), ("bbp", "bbp443")):
         v = np.array([r[k] for r in good])
         print("   %-8s across scans: %.4g +/- %.0f %%" % (t, v.mean(),
                                                           100 * v.std() / abs(v.mean())))
+    cols = ["n", "sky", "dm", "M", "adg", "bbp", "eta", "rms", "amp"]
     with open(os.path.join(a.out, "giop_per_scan.csv"), "w", newline="") as fh:
-        w = csv.DictWriter(fh, fieldnames=list(per[0]))
+        w = csv.DictWriter(fh, fieldnames=cols, extrasaction="ignore")
         w.writeheader(); w.writerows(per)
     print("\nwrote %s/giop_per_scan.csv" % a.out)
     for p in ps:

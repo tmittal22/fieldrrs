@@ -29,6 +29,17 @@ bench spectrophotometer later.
 
 *Cost:* about 5 minutes per station.
 
+> **Updated 2026-08-17, and the reason has changed.** The original argument was that
+> S_dg is *unconstrained* by R_rs, so a sample is the only way to pin it. That is now
+> known to be wrong: with the shape solver fixed, **S_dg is the best-constrained
+> parameter in the whole model** — a sharp interior χ² minimum at 0.011–0.013 nm⁻¹,
+> χ²_ν 74 → 17 against the assumed 0.018 (`LOC1_GIOP_FINDINGS.md` §2d). The sample is
+> still the top item, but now as a **falsification test**: a measured a_g(λ) on filtrate
+> gives S_dg directly, and if it disagrees with the retrieved 0.0115 then the retrieval
+> is absorbing something else into the CDOM slope — which, given that η simultaneously
+> rails at an unphysical −1, is a live possibility. One vial converts a
+> self-consistency argument into an external check.
+
 ### 2. Record the wind speed
 
 ρ carries 20–100 % of the R_rs error budget (THEORY.pdf p3) and is the largest single
@@ -116,6 +127,28 @@ independently corroborate the wind record.
 - **Number of water replicates.** 12 was ample: the shape converged to 1.7 %, and the
   residual spread is real water, not noise, so more replicates would measure the patchiness
   better but not the spectrum better.
+
+---
+
+## Tier 1b — added 2026-08-17: measure past 700 nm, or accept that the misfit stays
+
+The best model in the GIOP family still misfits these spectra by **8.5 % RMS against a
+1.9 % measurement uncertainty**, and the residual is one smooth curve with a +9σ lobe at
+560–600 nm and a −20σ notch at 690 nm — *identical in all 12 scans*, so it is model
+structure, not noise or scan variability. The instrument already records to 2500 nm; GIOP
+stops at 700 nm because Bricaud's a*_φ table does.
+
+So the fix is not more replicates. It is either
+
+- a **turbid-water inversion** that extends past 700 nm (QAA-turbid, or titanspec's
+  registry with a mineral component), which costs no field effort at all, or
+- **an independent constraint on backscatter**, since η running to the −1 bound says the
+  b_bp power law cannot make the red-rising backscatter the data want. A transmissometer
+  or a backscatter sensor would settle it; failing that, an SPM sample plus a stated
+  particle-size assumption bounds it.
+
+This is now the largest single item, ahead of anything in Tier 2, because it is the term
+that no amount of better field technique will reduce.
 
 ---
 
