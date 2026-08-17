@@ -102,18 +102,36 @@ itself stays pure standard library.
 
 ### Route A — standalone `fieldrrs.exe`, no Python on the tablet
 
-**PyInstaller cannot cross-compile**, so a Windows executable has to be built on
-Windows. It cannot be produced from Linux or macOS. Build it once, anywhere, then copy
-the single file.
+**Just download it.** Every release carries a prebuilt Windows binary, so you do not need
+to build anything:
 
-On any Windows machine with Python and internet, double-click **`build_exe.bat`**. It
-runs the test suite first, refuses to build from a broken tree, installs PyInstaller,
-and produces **`dist\fieldrrs.exe`**. Copy that one file to the tablet; it needs no
-Python there.
+**→ <https://github.com/tmittal22/fieldrrs/releases/latest>**
 
-No Windows machine to hand? Push this folder to GitHub and the included
-`.github/workflows/build-exe.yml` builds the exe on a Windows runner and attaches it as
-a downloadable artifact under the Actions tab.
+or straight to the file:
+
+```
+https://github.com/tmittal22/fieldrrs/releases/latest/download/fieldrrs.exe
+```
+
+No GitHub account needed. The same release carries `THEORY.pdf`, `FIELD_CARD.pdf` and
+`FIELD_PROTOCOL.md`. Copy `fieldrrs.exe` to the tablet and run it.
+
+**There is no `dist/` in the repository**, and there should not be: `dist/` is gitignored
+because a 12 MB binary does not belong in git history. The exe is a *release artifact*,
+built by CI from the exact commit being released, not a checked-in file.
+
+#### Building it yourself instead
+
+**PyInstaller cannot cross-compile**, so a Windows executable has to be built on Windows.
+It cannot be produced from Linux or macOS.
+
+On any Windows machine with Python and internet, double-click **`build_exe.bat`**. It runs
+the test suite first, refuses to build from a broken tree, installs PyInstaller, and
+produces **`dist\fieldrrs.exe`**.
+
+No Windows machine to hand? `.github/workflows/build-exe.yml` builds it on a GitHub
+Windows runner on every push and attaches it under the Actions tab. That artifact needs a
+GitHub login and expires; the release download above does not.
 
 The spec builds with a **console window on purpose** (`CONSOLE = True` in
 `fieldrrs.spec`). A windowed build looks tidier, but if the exe fails to start at a
