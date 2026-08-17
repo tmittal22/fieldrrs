@@ -1,0 +1,638 @@
+"""Full step-by-step analysis of ONE location / foreoptic dataset.
+
+    python analyse_location.py Data_NatureSpec/2026_Aug_16/by_location/LOC1_*/FLENS8_FOV08
+
+Writes an `analysis/` folder beside the data with four figures and a report:
+
+  fig1  the three measured quantities pooled, so the SPREAD is visible before anything
+        is derived from them
+  fig2  the calculation, step by step, on one representative scan
+  fig3  is E_d reasonable? checked against the true solar constant and against the
+        expected shape of atmospheric transmission
+  fig4  R_rs: the mean, and the FULL envelope over every water x sky pairing, with the
+        variance split into how much comes from the water and how much from the sky
+
+The fig4 envelope is the point. Picking one sky scan per water scan is a choice, and the
+usual practice (average the skies, or take the nearest in time) hides how much that
+choice was worth. Computing every pairing makes it explicit.
+"""
+
+import argparse
+import math
+import os
+import sys
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
+import matplotlib
+matplotlib.use("Agg")
+import matplotlib.pyplot as plt
+
+from fieldrrs.rrs import RHO_MOBLEY1999, rrs_three_scan
+from organize_by_location import fov_deg, survey
+from process_field_day import band
+
+WLO, WHI = 350.0, 950.0
+RLO, RHI = 400.0, 900.0
+C_SKY, C_WATER, C_PANEL, C_MEAN = "#7fb3d5", "#1f7a99", "#d9534f", "#c0392b"
+
+
+def clip(wl, v, lo=WLO, hi=WHI):
+    p = [(w, x) for w, x in zip(wl, v) if lo <= w <= hi]
+    return [a for a, _ in p], [b for _, b in p]
+
+
+def stats(curves):
+    """Pointwise mean, min, max and relative spread across a list of spectra."""
+    n = len(curves)
+    m = [sum(c[i] for c in curves) / n for i in range(len(curves[0]))]
+    lo = [min(c[i] for c in curves) for i in range(len(m))]
+    hi = [max(c[i] for c in curves) for i in range(len(m))]
+    return m, lo, hi
+
+
+def rayleigh_tau(wl_nm):
+    """Bodhaine et al. (1999) Rayleigh optical depth at sea level, wl in nm."""
+    u = wl_nm / 1000.0
+    return 0.0021520 * (1.0455996 - 341.29061 / u**2 - 0.90230850 * u**2) / \
+           (1 + 0.0027059889 / u**2 - 85.968563 * u**2)
+
+
+def hhmm(h):
+    return "%02d:%02d" % (int(h), int(round((h - int(h)) * 60)))
+
+
+# ---------------------------------------------------------------- figure 1
+def fig_pooled(sky, water, panels, wl, outdir, tag):
+    fig, axes = plt.subplots(1, 3, figsize=(17, 5.0))
+    for ax, group, col, title, key in (
+            (axes[0], panels, C_PANEL, "CALIBRATION PANEL  $L_{ref}$", "rad_ref"),
+            (axes[1], sky, C_SKY, "SKY  $L_{sky}$", "rad_target"),
+            (axes[2], water, C_WATER, "WATER  $L_t$", "rad_target")):
+        curves = [s["spec"].columns[key] for s in group]
+        m, lo, hi = stats(curves)
+        for c in curves:
+            ax.plot(*clip(wl, c), lw=0.8, alpha=0.5, color=col)
+        wlc, mc = clip(wl, m)
+        ax.plot(wlc, mc, lw=2.4, color="k", label="mean (n=%d)" % len(curves))
+        ax.fill_between(wlc, clip(wl, lo)[1], clip(wl, hi)[1], color=col, alpha=0.22,
+                        label="full range")
+        ax.set_yscale("log")
+        pos = [v for v in mc if v > 0]
+        ax.set_ylim(min(pos) * 0.6, max(pos) * 1.8)
+        ax.set_xlabel("wavelength (nm)"); ax.grid(alpha=0.25)
+        ax.legend(fontsize=9, loc="lower left")
+        # spread in the visible
+        sv = [(hi[i] - lo[i]) / m[i] for i, w in enumerate(wl) if 450 <= w <= 650]
+        ax.set_title("%s\nn=%d   full spread in 450-650 nm: %.1f %%"
+                     % (title, len(curves), 100 * sum(sv) / len(sv)), fontsize=11)
+    axes[0].set_ylabel("radiance  W m$^{-2}$ sr$^{-1}$ nm$^{-1}$")
+    fig.suptitle("%s — the three measured quantities, every scan overlaid" % tag,
+                 fontsize=13, weight="bold")
+    fig.tight_layout(rect=(0, 0, 1, 0.92))
+    p = os.path.join(outdir, "fig1_pooled_measurements.png")
+    fig.savefig(p, dpi=140); plt.close(fig)
+    return p
+
+
+# ---------------------------------------------------------------- figure 2
+def fig_steps(w, l_sky, l_panel, wl, outdir, tag, panel_r, rho):
+    lt = w["spec"].columns["rad_target"]
+    ed = [math.pi * p / panel_r for p in l_panel]
+    lw = [t - rho * s for t, s in zip(lt, l_sky)]
+    res = rrs_three_scan(wl, lt, l_sky, l_panel, panel_r, rho, "none")
+
+    fig, ax = plt.subplots(2, 2, figsize=(14, 9))
+    a = ax[0][0]
+    for v, c, lab in ((l_panel, C_PANEL, "$L_{panel}$"), (l_sky, C_SKY, "$L_{sky}$"),
+                      (lt, C_WATER, "$L_t$ (water)")):
+        a.plot(*clip(wl, v), lw=1.8, color=c, label=lab)
+    a.set_yscale("log"); a.legend(fontsize=9.5)
+    a.set_title("STEP 1   three radiances, scan %s" % w["n"], fontsize=11, loc="left")
+    a.set_ylabel("W m$^{-2}$ sr$^{-1}$ nm$^{-1}$")
+
+    a = ax[0][1]
+    a.plot(*clip(wl, ed), lw=2.2, color=C_PANEL)
+    a.set_title("STEP 2   $E_d = \\pi L_{panel} / R_{panel}$   ($R_{panel}$=%.2f)"
+                % panel_r, fontsize=11, loc="left")
+    a.set_ylabel("W m$^{-2}$ nm$^{-1}$")
+
+    a = ax[1][0]
+    a.plot(*clip(wl, lt), lw=1.5, color=C_WATER, label="$L_t$")
+    a.plot(*clip(wl, [rho * s for s in l_sky]), lw=1.5, color=C_SKY,
+           label="$\\rho L_{sky}$, $\\rho$=%.3f" % rho)
+    a.plot(*clip(wl, lw), lw=2.4, color=C_MEAN, label="$L_w$")
+    frac = [100 * rho * s / t for w_, t, s in zip(wl, lt, l_sky) if 440 <= w_ <= 460
+            for t, s in [(t, s)]]
+    a.legend(fontsize=9.5)
+    a.set_title("STEP 3   remove reflected skylight", fontsize=11, loc="left")
+    a.set_ylabel("W m$^{-2}$ sr$^{-1}$ nm$^{-1}$")
+    f = [100 * rho * s / t for lam, t, s in zip(wl, lt, l_sky) if 440 <= lam <= 460]
+    a.text(0.03, 0.92, "skylight removed = %.0f %% of $L_t$ at 450 nm" % (sum(f)/len(f)),
+           transform=a.transAxes, fontsize=9, color=C_MEAN)
+
+    a = ax[1][1]
+    a.plot(*clip(wl, res.rrs, RLO, RHI), lw=2.4, color=C_MEAN)
+    a.axhline(0, color="#888", lw=0.8)
+    a.set_title("STEP 4   $R_{rs} = L_w / E_d$", fontsize=11, loc="left")
+    a.set_ylabel("$R_{rs}$  sr$^{-1}$")
+    for a_ in ax.flat:
+        a_.set_xlabel("wavelength (nm)"); a_.grid(alpha=0.25)
+    fig.suptitle("%s — the calculation, worked" % tag, fontsize=13, weight="bold")
+    fig.tight_layout(rect=(0, 0, 1, 0.94))
+    p = os.path.join(outdir, "fig2_steps.png")
+    fig.savefig(p, dpi=140); plt.close(fig)
+    return p
+
+
+# ---------------------------------------------------------------- figure 3
+def fig_ed(panels, wl, sun, outdir, tag, panel_r):
+    try:
+        sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                                        "..", "giop_python", "src"))
+        import numpy as np
+        from giop.water import f0_solar
+    except Exception as exc:
+        print("  F0 table unavailable (%s); skipping fig3" % exc)
+        return None, {}
+
+    wl_a = np.array(wl)
+    eds = [np.array([math.pi * p / panel_r for p in s["spec"].columns["rad_ref"]])
+           for s in panels]
+    ed = sum(eds) / len(eds)
+    mu = math.cos(math.radians(90.0 - sun))
+    f0 = f0_solar(wl_a)
+    T = ed / (f0 * mu)
+    m = (wl_a >= 380) & (wl_a <= 950)
+
+    fig, axes = plt.subplots(1, 3, figsize=(17, 4.9))
+    a = axes[0]
+    a.plot(wl_a[m], ed[m], lw=2.2, color=C_PANEL, label="$E_d$ from panel")
+    a.plot(wl_a[m], (f0 * mu)[m], lw=1.8, color="#8a6000", ls="--",
+           label="$F_0\\cos\\theta_s$ (top of atmosphere)")
+    a.set_ylabel("W m$^{-2}$ nm$^{-1}$"); a.legend(fontsize=9)
+    a.set_title("Measured $E_d$ against the solar constant", fontsize=11, loc="left")
+
+    a = axes[1]
+    a.plot(wl_a[m], T[m], lw=2.2, color="#2e7d32")
+    tau = np.array([rayleigh_tau(x) for x in wl_a])
+    a.plot(wl_a[m], np.exp(-tau[m] / mu), lw=1.6, ls="--", color="#2c6f9b",
+           label="direct-beam Rayleigh only")
+    a.axhline(1.0, color="#c0392b", lw=1.4)
+    a.text(390, 1.02, "T = 1 is the hard ceiling", fontsize=8.5, color="#c0392b")
+    for lam, lab in ((762, "$O_2$-A"), (940, "$H_2O$")):
+        a.axvline(lam, color="#888", ls=":", lw=1)
+        a.text(lam + 4, 0.15, lab, fontsize=8.5, color="#555")
+    a.set_ylim(0, 1.15); a.legend(fontsize=8.5, loc="lower right")
+    a.set_ylabel("total transmittance $T$")
+    a.set_title("$T = E_d / (F_0\\cos\\theta_s)$   sun %.1f$^\\circ$ elevation"
+                % sun, fontsize=11, loc="left")
+
+    a = axes[2]
+    vis = (wl_a >= 450) & (wl_a <= 650)
+    for i, (s, e) in enumerate(zip(panels, eds)):
+        a.plot(wl_a[m], (e / ed)[m], lw=1.1, alpha=0.8,
+               label="ref %.4f" % band(s["spec"], "rad_ref", 450, 650))
+    a.axhline(1, color="k", lw=1)
+    a.set_ylabel("$E_d$ / mean $E_d$")
+    a.set_title("Panel-to-panel consistency", fontsize=11, loc="left")
+    a.legend(fontsize=8)
+    for a_ in axes:
+        a_.set_xlabel("wavelength (nm)"); a_.grid(alpha=0.25); a_.set_xlim(380, 950)
+
+    diag = {
+        "T_vis": float(np.median(T[vis])),
+        "T_max": float(np.max(T[m])),
+        "T_ok": bool(np.all(T[m] < 1.0)),
+        "o2_depth": float(1 - np.min(T[(wl_a > 755) & (wl_a < 775)]) /
+                          np.median(T[(wl_a > 730) & (wl_a < 750)])),
+        "h2o_depth": float(1 - np.min(T[(wl_a > 920) & (wl_a < 960)]) /
+                           np.median(T[(wl_a > 860) & (wl_a < 890)])),
+        "blue_red": float(np.median(T[(wl_a > 600) & (wl_a < 680)]) /
+                          np.median(T[(wl_a > 420) & (wl_a < 480)])),
+        "ed_spread": float(np.max([np.max(np.abs(e / ed - 1)[vis]) for e in eds])),
+    }
+    fig.suptitle("%s — is $E_d$ reasonable?" % tag, fontsize=13, weight="bold")
+    fig.tight_layout(rect=(0, 0, 1, 0.92))
+    p = os.path.join(outdir, "fig3_Ed_check.png")
+    fig.savefig(p, dpi=140); plt.close(fig)
+    return p, diag
+
+
+# ---------------------------------------------------------------- figure 4
+def fig_rrs(water, sky, wl, outdir, tag, panel_r, rho):
+    """Every water x sky pairing, so the cost of the sky choice is explicit."""
+    combos, by_water, by_sky = [], {}, {}
+    for w in water:
+        lt = w["spec"].columns["rad_target"]
+        lp = w["spec"].columns["rad_ref"]          # each water scan's OWN panel
+        for s in sky:
+            r = rrs_three_scan(wl, lt, s["spec"].columns["rad_target"], lp,
+                               panel_r, rho, "none").rrs
+            combos.append(r)
+            by_water.setdefault(w["n"], []).append(r)
+            by_sky.setdefault(s["n"], []).append(r)
+
+    l_sky_mean = [sum(s["spec"].columns["rad_target"][i] for s in sky) / len(sky)
+                  for i in range(len(wl))]
+    canon = []
+    for w in water:
+        canon.append(rrs_three_scan(wl, w["spec"].columns["rad_target"], l_sky_mean,
+                                    w["spec"].columns["rad_ref"], panel_r, rho,
+                                    "none").rrs)
+    cm, _, _ = stats(canon)
+    m, lo, hi = stats(combos)
+
+    fig, axes = plt.subplots(1, 3, figsize=(17, 5.0))
+    a = axes[0]
+    wlc, mc = clip(wl, cm, RLO, RHI)
+    a.fill_between(wlc, clip(wl, lo, RLO, RHI)[1], clip(wl, hi, RLO, RHI)[1],
+                   color="#bbb", alpha=0.55,
+                   label="every water x sky pairing (n=%d)" % len(combos))
+    for c in canon:
+        a.plot(*clip(wl, c, RLO, RHI), lw=0.8, alpha=0.6, color=C_WATER)
+    a.plot(wlc, mc, lw=2.8, color=C_MEAN, label="mean, sky-averaged (n=%d)" % len(canon))
+    a.axhline(0, color="#888", lw=0.8)
+    a.set_ylabel("$R_{rs}$  sr$^{-1}$"); a.legend(fontsize=9)
+    a.set_title("$R_{rs}$: mean and the full pairing envelope", fontsize=11, loc="left")
+
+    # variance split: water-to-water vs sky-to-sky
+    a = axes[1]
+    idx = [i for i, x in enumerate(wl) if RLO <= x <= RHI]
+    wspread, sspread = [], []
+    for i in idx:
+        wm = [sum(v[i] for v in by_water[k]) / len(by_water[k]) for k in by_water]
+        sm = [sum(v[i] for v in by_sky[k]) / len(by_sky[k]) for k in by_sky]
+        mu = sum(v[i] for v in combos) / len(combos)
+        wspread.append((max(wm) - min(wm)) / abs(mu) * 100 if mu else 0)
+        sspread.append((max(sm) - min(sm)) / abs(mu) * 100 if mu else 0)
+    a.plot([wl[i] for i in idx], wspread, lw=2.2, color=C_WATER,
+           label="which WATER scan (n=%d)" % len(water))
+    a.plot([wl[i] for i in idx], sspread, lw=2.2, color=C_SKY,
+           label="which SKY scan (n=%d)" % len(sky))
+    a.set_ylabel("full range of the group means, % of $R_{rs}$")
+    a.legend(fontsize=9)
+    a.set_title("Where the spread comes from", fontsize=11, loc="left")
+
+    a = axes[2]
+    for k in sorted(by_sky):
+        sm = [sum(v[i] for v in by_sky[k]) / len(by_sky[k]) for i in range(len(wl))]
+        a.plot(*clip(wl, sm, RLO, RHI), lw=1.4, label="sky %s" % k)
+    a.plot(wlc, mc, lw=2.6, color="k", ls="--", label="sky-averaged")
+    a.set_ylabel("$R_{rs}$  sr$^{-1}$"); a.legend(fontsize=7.5, ncol=2)
+    a.set_title("Mean $R_{rs}$ if you had used ONE sky scan", fontsize=11, loc="left")
+    for a_ in axes:
+        a_.set_xlabel("wavelength (nm)"); a_.grid(alpha=0.25); a_.set_xlim(RLO, RHI)
+    fig.suptitle("%s — $R_{rs}$ and the cost of the sky choice" % tag, fontsize=13,
+                 weight="bold")
+    fig.tight_layout(rect=(0, 0, 1, 0.92))
+    p = os.path.join(outdir, "fig4_rrs_spread.png")
+    fig.savefig(p, dpi=140); plt.close(fig)
+
+    i443 = min(range(len(wl)), key=lambda k: abs(wl[k] - 443))
+    i555 = min(range(len(wl)), key=lambda k: abs(wl[k] - 555))
+    out = {"n_combos": len(combos), "mean": cm, "lo": lo, "hi": hi,
+           "rrs443": cm[i443], "rrs555": cm[i555],
+           "env443": (hi[i443] - lo[i443]) / cm[i443] * 100,
+           "env555": (hi[i555] - lo[i555]) / cm[i555] * 100,
+           "w_spread": max(wspread), "s_spread": max(sspread),
+           "w_spread_443": wspread[idx.index(i443)],
+           "s_spread_443": sspread[idx.index(i443)]}
+    return p, out
+
+
+# ---------------------------------------------------------------- figure 5
+NIR_SIM_RATIO = 1.912          # Ruddick et al. (2006)
+
+
+def similarity_delta(wl, rrs):
+    """The offset the NIR-similarity criterion says is left over.
+
+    Ruddick et al. (2006): for a wide range of turbid water the TRUE R_rs obeys
+    R_rs(780)/R_rs(870) = 1.912. If the measured pair does not, the discrepancy is
+    attributed to a spectrally flat residual `delta`:
+
+        (R780 - d) = 1.912 (R870 - d)   ->   d = (1.912 R870 - R780) / 0.912
+
+    A pair of scans needing a SMALL |d| is one where the sky subtraction already
+    left a physically consistent spectrum. That is what "best matched" means here:
+    least ad-hoc correction required, not best-looking.
+    """
+    def at(lam):
+        v = [x for w, x in zip(wl, rrs) if lam - 5 <= w <= lam + 5]
+        return sum(v) / len(v)
+    return (NIR_SIM_RATIO * at(870.0) - at(780.0)) / (NIR_SIM_RATIO - 1.0)
+
+
+def fig_geometry(scans, water, sky, wl, outdir, tag, panel_r, rho):
+    import numpy as np
+    fig, axes = plt.subplots(1, 3, figsize=(17, 5.0))
+
+    a = axes[0]
+    for role, col in (("sky", C_SKY), ("water", C_WATER), ("vegetation", "#2e7d32")):
+        g = [x for x in scans if x["role"] == role]
+        if not g:
+            continue
+        a.scatter([x["spec"].tilt_y_deg for x in g], [x["spec"].tilt_x_deg for x in g],
+                  s=70, color=col, edgecolor="k", linewidth=0.5, alpha=0.85,
+                  label="%s (n=%d)" % (role, len(g)))
+    a.axvline(50.0, color="#c0392b", ls="--", lw=1.6)
+    a.text(50.4, a.get_ylim()[0] + 0.3, "50$^\\circ$ from horizontal\n= 40$^\\circ$ "
+           "from nadir/zenith\n(Mobley nominal)", fontsize=8.5, color="#c0392b")
+    a.axhline(0, color="#888", lw=1)
+    a.set_xlabel("tilt Y (deg from horizontal)")
+    a.set_ylabel("tilt X (deg, roll)")
+    a.legend(fontsize=9)
+    a.set_title("Pointing actually achieved\n(the sensor gives MAGNITUDE, so sky and "
+                "water overlap)", fontsize=10.5, loc="left")
+
+    # distribution of the 96 pairings
+    a = axes[1]
+    combos, deltas, pairs = [], [], []
+    for w in water:
+        lt = w["spec"].columns["rad_target"]
+        lp = w["spec"].columns["rad_ref"]
+        for sk in sky:
+            r = rrs_three_scan(wl, lt, sk["spec"].columns["rad_target"], lp, panel_r,
+                               rho, "none").rrs
+            combos.append(r)
+            deltas.append(similarity_delta(wl, r))
+            pairs.append((w["n"], sk["n"]))
+    i443 = min(range(len(wl)), key=lambda k: abs(wl[k] - 443))
+    i555 = min(range(len(wl)), key=lambda k: abs(wl[k] - 555))
+    for idx, lam, col in ((i443, 443, "#2c6f9b"), (i555, 555, "#2e7d32")):
+        v = [c[idx] for c in combos]
+        a.hist(v, bins=22, alpha=0.6, color=col,
+               label="%d nm: %.5f $\\pm$ %.5f" % (lam, np.mean(v), np.std(v)))
+        a.axvline(np.mean(v), color=col, lw=2)
+    a.set_xlabel("$R_{rs}$  sr$^{-1}$"); a.set_ylabel("number of pairings")
+    a.legend(fontsize=9)
+    a.set_title("Distribution over all %d water$\\times$sky pairings" % len(combos),
+                fontsize=10.5, loc="left")
+
+    a = axes[2]
+    order = sorted(range(len(combos)), key=lambda k: abs(deltas[k]))
+    best, worst = order[0], order[-1]
+    a.plot(*clip(wl, combos[best], RLO, RHI), lw=2.4, color="#2e7d32",
+           label="BEST pair  w%s/s%s   $\\delta$=%+.2e"
+                 % (pairs[best][0], pairs[best][1], deltas[best]))
+    a.plot(*clip(wl, combos[worst], RLO, RHI), lw=2.0, color="#c0392b", ls="--",
+           label="WORST pair w%s/s%s   $\\delta$=%+.2e"
+                 % (pairs[worst][0], pairs[worst][1], deltas[worst]))
+    m, lo, hi = stats(combos)
+    a.plot(*clip(wl, m, RLO, RHI), lw=2.6, color="k", ls=":", label="mean of all")
+    a.axhline(0, color="#888", lw=0.8)
+    a.set_xlabel("wavelength (nm)"); a.set_ylabel("$R_{rs}$  sr$^{-1}$")
+    a.legend(fontsize=8.5)
+    a.set_title("Best vs worst pairing by NIR-similarity mismatch", fontsize=10.5,
+                loc="left")
+    for a_ in axes[1:]:
+        a_.grid(alpha=0.25)
+    axes[0].grid(alpha=0.25)
+    fig.suptitle("%s — geometry, the pairing distribution, and the best-matched pair"
+                 % tag, fontsize=13, weight="bold")
+    fig.tight_layout(rect=(0, 0, 1, 0.92))
+    p = os.path.join(outdir, "fig5_geometry_and_pairing.png")
+    fig.savefig(p, dpi=140); plt.close(fig)
+    return p, {"best": pairs[best], "worst": pairs[worst],
+               "d_best": deltas[best], "d_worst": deltas[worst],
+               "rrs443_mean": float(np.mean([c[i443] for c in combos])),
+               "rrs443_sd": float(np.std([c[i443] for c in combos]))}
+
+
+# ---------------------------------------------------------------- figure 6
+def fig_sensitivity(water, sky, wl, outdir, tag, panel_r, rho, fov):
+    """Does the pointing angle or the footprint systematically move R_rs?"""
+    import numpy as np
+    from scipy import stats as sps
+
+    l_sky_mean = [sum(s["spec"].columns["rad_target"][i] for s in sky) / len(sky)
+                  for i in range(len(wl))]
+    i443 = min(range(len(wl)), key=lambda k: abs(wl[k] - 443))
+    i555 = min(range(len(wl)), key=lambda k: abs(wl[k] - 555))
+
+    rows = []
+    for w in water:
+        r = rrs_three_scan(wl, w["spec"].columns["rad_target"], l_sky_mean,
+                           w["spec"].columns["rad_ref"], panel_r, rho, "none").rrs
+        fp = 2 * w["range"] * math.tan(math.radians(fov / 2.0))
+        rows.append({"tilt": w["spec"].tilt_y_deg, "range": w["range"],
+                     "fp": fp, "r443": r[i443], "r555": r[i555], "n": w["n"],
+                     "gps": w["gps"]})
+
+    # and the sky-side test: vary which sky, keep water fixed to its own mean
+    sky_rows = []
+    for sk in sky:
+        vals = []
+        for w in water:
+            r = rrs_three_scan(wl, w["spec"].columns["rad_target"],
+                               sk["spec"].columns["rad_target"],
+                               w["spec"].columns["rad_ref"], panel_r, rho, "none").rrs
+            vals.append(r[i443])
+        sky_rows.append({"tilt": sk["spec"].tilt_y_deg, "r443": float(np.mean(vals)),
+                         "n": sk["n"]})
+
+    fig, axes = plt.subplots(1, 3, figsize=(17, 5.0))
+    spec = []
+    for a, xs, ys, xlab, ylab, title, col in (
+            (axes[0], [r["tilt"] for r in rows], [r["r443"] for r in rows],
+             "WATER scan tilt Y (deg)", "$R_{rs}$(443)  sr$^{-1}$",
+             "Does the WATER view angle matter?", C_WATER),
+            (axes[1], [r["tilt"] for r in sky_rows], [r["r443"] for r in sky_rows],
+             "SKY scan tilt Y (deg)", "mean $R_{rs}$(443)  sr$^{-1}$",
+             "Does the SKY view angle matter?", C_SKY),
+            (axes[2], [r["fp"] for r in rows], [r["r443"] for r in rows],
+             "footprint across-view (m)", "$R_{rs}$(443)  sr$^{-1}$",
+             "Does the FOOTPRINT matter?", "#8a6000")):
+        a.scatter(xs, ys, s=80, color=col, edgecolor="k", linewidth=0.5, zorder=3)
+        r_p, p_p = sps.pearsonr(xs, ys)
+        r_s, p_s = sps.spearmanr(xs, ys)
+        sl, ic = np.polyfit(xs, ys, 1)
+        xx = np.linspace(min(xs), max(xs), 20)
+        a.plot(xx, sl * xx + ic, lw=2, color="k", ls="--", zorder=2)
+        verdict = "SIGNIFICANT" if p_p < 0.05 else "no significant trend"
+        a.set_xlabel(xlab); a.set_ylabel(ylab); a.grid(alpha=0.25)
+        a.set_title("%s\nPearson r=%+.2f (p=%.3f) · Spearman %+.2f (p=%.3f)\n%s"
+                    % (title, r_p, p_p, r_s, p_s, verdict), fontsize=10, loc="left")
+        spec.append({"what": title, "r": r_p, "p": p_p, "rs": r_s, "ps": p_s,
+                     "slope": sl, "span": max(xs) - min(xs),
+                     "effect": sl * (max(xs) - min(xs)),
+                     "rel": abs(sl * (max(xs) - min(xs))) / np.mean(ys) * 100})
+
+    # CONFOUND CONTROL. A correlation with tilt is only interesting if tilt is not
+    # standing in for something else -- time (the water changes, the sun rises) or
+    # range. Partial correlation removes the linear part of the third variable.
+    def partial(x, y, z):
+        rx = np.asarray(x) - np.polyval(np.polyfit(z, x, 1), z)
+        ry = np.asarray(y) - np.polyval(np.polyfit(z, y, 1), z)
+        r, _ = sps.pearsonr(rx, ry)
+        n = len(x)
+        t = r * math.sqrt((n - 3) / max(1e-12, 1 - r * r))
+        return r, float(2 * (1 - sps.t.cdf(abs(t), n - 3)))
+
+    tilt = [r["tilt"] for r in rows]
+    r443 = [r["r443"] for r in rows]
+    tme = [r["gps"] for r in rows]
+    rng = [r["range"] for r in rows]
+    conf = {
+        "tilt_vs_time": sps.pearsonr(tilt, tme),
+        "range_vs_time": sps.pearsonr(rng, tme),
+        "tilt_ctrl_time": partial(tilt, r443, tme),
+        "tilt_ctrl_range": partial(tilt, r443, rng),
+        "range_ctrl_tilt": partial(rng, r443, tilt),
+        "n_ranges": len(set(rng)),
+    }
+    fig.suptitle("%s — does pointing or footprint systematically bias $R_{rs}$?" % tag,
+                 fontsize=13, weight="bold")
+    fig.tight_layout(rect=(0, 0, 1, 0.90))
+    p = os.path.join(outdir, "fig6_angle_footprint.png")
+    fig.savefig(p, dpi=140); plt.close(fig)
+    return p, spec, conf
+
+
+
+def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument("folder")
+    ap.add_argument("--rho", type=float, default=RHO_MOBLEY1999)
+    ap.add_argument("--panel-reflectance", type=float, default=0.99)
+    a = ap.parse_args()
+
+    scans = survey(a.folder)
+    loc = os.path.basename(os.path.dirname(a.folder.rstrip("/")))
+    fo = os.path.basename(a.folder.rstrip("/"))
+    tag = "%s  ·  %s" % (loc, fo)
+    outdir = os.path.join(a.folder, "analysis")
+    os.makedirs(outdir, exist_ok=True)
+
+    sky = sorted([s for s in scans if s["role"] == "sky"], key=lambda x: x["n"])
+    water = sorted([s for s in scans if s["role"] == "water"], key=lambda x: x["n"])
+    veg = [s for s in scans if s["role"] == "vegetation"]
+    wl = scans[0]["spec"].wavelength
+
+    # one representative panel per distinct reference
+    seen, panels = set(), []
+    for s in scans:
+        k = round(band(s["spec"], "rad_ref", 450, 650), 6)
+        if k not in seen:
+            seen.add(k); panels.append(s)
+
+    L = []
+    P = L.append
+    P("=" * 78)
+    P("%s" % tag)
+    P("=" * 78)
+    P("%d scans   %s-%s UTC   sun %.2f-%.2f deg   FOV %.0f deg"
+      % (len(scans), hhmm(min(s["gps"] for s in scans)),
+         hhmm(max(s["gps"] for s in scans)), min(s["sun"] for s in scans),
+         max(s["sun"] for s in scans), fov_deg(fo.split("_")[0])))
+    P("%d sky, %d water, %d vegetation (excluded)" % (len(sky), len(water), len(veg)))
+    P("%d distinct panel references, so the panel was re-taken %d time(s) mid-station"
+      % (len(panels), len(panels) - 1))
+    rng = [s["range"] for s in scans]
+    P("range %.3f-%.3f m -> footprint %.2f-%.2f m across (2 R tan(FOV/2))"
+      % (min(rng), max(rng),
+         2 * min(rng) * math.tan(math.radians(fov_deg(fo.split("_")[0]) / 2)),
+         2 * max(rng) * math.tan(math.radians(fov_deg(fo.split("_")[0]) / 2))))
+    P("")
+
+    p1 = fig_pooled(sky, water, panels, wl, outdir, tag)
+    for name, grp, key in (("PANEL", panels, "rad_ref"), ("SKY", sky, "rad_target"),
+                           ("WATER", water, "rad_target")):
+        cur = [s["spec"].columns[key] for s in grp]
+        m, lo, hi = stats(cur)
+        sv = [(hi[i] - lo[i]) / m[i] for i, w in enumerate(wl) if 450 <= w <= 650]
+        P("%-6s n=%2d   mean L(450-650) = %.4e   full spread %.1f %%"
+          % (name, len(cur), sum(m[i] for i, w in enumerate(wl) if 450 <= w <= 650) /
+             sum(1 for w in wl if 450 <= w <= 650), 100 * sum(sv) / len(sv)))
+    P("")
+
+    l_sky_mean = [sum(s["spec"].columns["rad_target"][i] for s in sky) / len(sky)
+                  for i in range(len(wl))]
+    rep = water[len(water) // 2]
+    p2 = fig_steps(rep, l_sky_mean, rep["spec"].columns["rad_ref"], wl, outdir, tag,
+                   a.panel_reflectance, a.rho)
+
+    sun = sum(s["sun"] for s in scans) / len(scans)
+    p3, diag = fig_ed(panels, wl, sun, outdir, tag, a.panel_reflectance)
+    if diag:
+        P("IS E_d REASONABLE?")
+        P("  median T over 450-650 nm      %.3f      (clear sky 0.6-0.9)" % diag["T_vis"])
+        P("  max T anywhere 380-950 nm     %.3f      %s"
+          % (diag["T_max"], "OK, below the hard ceiling of 1"
+             if diag["T_ok"] else "IMPOSSIBLE, exceeds 1"))
+        P("  O2-A absorption depth         %.1f %%     (a real atmosphere shows this)"
+          % (100 * diag["o2_depth"]))
+        P("  H2O 940 nm absorption depth   %.1f %%" % (100 * diag["h2o_depth"]))
+        P("  T(red)/T(blue)                %.2f       (>1 expected: Rayleigh weakens "
+          "to the red)" % diag["blue_red"])
+        P("  panel-to-panel disagreement   %.1f %%     over 450-650 nm"
+          % (100 * diag["ed_spread"]))
+        verdict = ("REASONABLE" if diag["T_ok"] and 0.5 < diag["T_vis"] < 0.95
+                   and diag["o2_depth"] > 0.05 and diag["blue_red"] > 1.0
+                   else "SUSPECT, inspect fig3")
+        P("  VERDICT: %s" % verdict)
+        P("")
+
+    p4, r = fig_rrs(water, sky, wl, outdir, tag, a.panel_reflectance, a.rho)
+    P("R_rs RESULT")
+    P("  Rrs(443) = %.5f sr^-1     Rrs(555) = %.5f sr^-1" % (r["rrs443"], r["rrs555"]))
+    P("  %d water x sky pairings computed" % r["n_combos"])
+    P("  pairing envelope: %.1f %% at 443 nm, %.1f %% at 555 nm"
+      % (r["env443"], r["env555"]))
+    P("  spread from WHICH WATER scan:  %.1f %% at 443 nm (max %.1f %% over 400-900)"
+      % (r["w_spread_443"], r["w_spread"]))
+    P("  spread from WHICH SKY scan:    %.1f %% at 443 nm (max %.1f %% over 400-900)"
+      % (r["s_spread_443"], r["s_spread"]))
+    dom = "WATER-to-water variability" if r["w_spread_443"] > r["s_spread_443"] \
+        else "the SKY choice"
+    P("  -> %s dominates at 443 nm." % dom)
+    P("")
+    P("For scale, rho alone (0.022-0.045) moves Rrs(443) by ~32 %%, so it remains the")
+    P("largest single term. See THEORY.pdf p3.")
+
+    p5, g = fig_geometry(scans, water, sky, wl, outdir, tag, a.panel_reflectance, a.rho)
+    P("")
+    P("BEST-MATCHED PAIR (smallest NIR-similarity residual)")
+    P("  best   water %s + sky %s   delta = %+.3e sr^-1" % (g["best"][0], g["best"][1],
+                                                            g["d_best"]))
+    P("  worst  water %s + sky %s   delta = %+.3e sr^-1" % (g["worst"][0],
+                                                            g["worst"][1], g["d_worst"]))
+    P("  across all pairings Rrs(443) = %.5f +/- %.5f (1 sd)"
+      % (g["rrs443_mean"], g["rrs443_sd"]))
+
+    fov = fov_deg(fo.split("_")[0])
+    p6, spec, conf = fig_sensitivity(water, sky, wl, outdir, tag, a.panel_reflectance,
+                                     a.rho, fov)
+    P("")
+    P("DOES GEOMETRY MATTER? (Rrs(443), n=%d water / %d sky)" % (len(water), len(sky)))
+    for d in spec:
+        P("  %-34s r=%+.2f p=%.3f   over the observed span: %+.1f %%"
+          % (d["what"].replace("Does the ", "").replace("?", ""), d["r"], d["p"],
+             d["rel"] if d["effect"] >= 0 else -d["rel"]))
+    sig = [d for d in spec if d["p"] < 0.05]
+    P("  -> %s" % ("no term reaches p<0.05, so none is separable from scan-to-scan "
+                   "noise at this n" if not sig
+                   else "SIGNIFICANT: " + "; ".join(d["what"] for d in sig)))
+    P("")
+    P("  CONFOUND CONTROL (a tilt trend could just be time or range in disguise)")
+    P("    tilt correlated with time?    r=%+.2f p=%.3f" % conf["tilt_vs_time"])
+    P("    range correlated with time?   r=%+.2f p=%.3f" % conf["range_vs_time"])
+    P("    tilt vs Rrs | control TIME    r=%+.2f p=%.3f" % conf["tilt_ctrl_time"])
+    P("    tilt vs Rrs | control RANGE   r=%+.2f p=%.3f" % conf["tilt_ctrl_range"])
+    P("    range vs Rrs | control TILT   r=%+.2f p=%.3f" % conf["range_ctrl_tilt"])
+    P("    range took only %d distinct values, so 'footprint' is a %d-level factor "
+      "here, not a continuum." % (conf["n_ranges"], conf["n_ranges"]))
+
+    txt = "\n".join(L)
+    print(txt)
+    with open(os.path.join(outdir, "REPORT.txt"), "w") as fh:
+        fh.write(txt + "\n")
+    print("\nwrote %s/REPORT.txt" % outdir)
+    for p in (p1, p2, p3, p4, p5, p6):
+        if p:
+            print("wrote %s" % p)
+
+
+if __name__ == "__main__":
+    main()

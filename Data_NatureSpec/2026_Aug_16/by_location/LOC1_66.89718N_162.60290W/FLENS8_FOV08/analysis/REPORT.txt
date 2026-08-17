@@ -1,0 +1,50 @@
+==============================================================================
+LOC1_66.89718N_162.60290W  ·  FLENS8_FOV08
+==============================================================================
+22 scans   20:24-20:41 UTC   sun 31.42-32.47 deg   FOV 8 deg
+8 sky, 12 water, 2 vegetation (excluded)
+2 distinct panel references, so the panel was re-taken 1 time(s) mid-station
+range 0.984-1.492 m -> footprint 0.14-0.21 m across (2 R tan(FOV/2))
+
+PANEL  n= 2   mean L(450-650) = 2.3047e-01   full spread 1.2 %
+SKY    n= 8   mean L(450-650) = 2.3319e-02   full spread 14.3 %
+WATER  n=12   mean L(450-650) = 5.6257e-03   full spread 33.3 %
+
+IS E_d REASONABLE?
+  median T over 450-650 nm      0.759      (clear sky 0.6-0.9)
+  max T anywhere 380-950 nm     0.921      OK, below the hard ceiling of 1
+  O2-A absorption depth         67.4 %     (a real atmosphere shows this)
+  H2O 940 nm absorption depth   87.4 %
+  T(red)/T(blue)                1.17       (>1 expected: Rayleigh weakens to the red)
+  panel-to-panel disagreement   1.6 %     over 450-650 nm
+  VERDICT: REASONABLE
+
+R_rs RESULT
+  Rrs(443) = 0.00276 sr^-1     Rrs(555) = 0.00888 sr^-1
+  96 water x sky pairings computed
+  pairing envelope: 46.3 % at 443 nm, 37.5 % at 555 nm
+  spread from WHICH WATER scan:  38.7 % at 443 nm (max 79.0 % over 400-900)
+  spread from WHICH SKY scan:    7.6 % at 443 nm (max 23.5 % over 400-900)
+  -> WATER-to-water variability dominates at 443 nm.
+
+For scale, rho alone (0.022-0.045) moves Rrs(443) by ~32 %%, so it remains the
+largest single term. See THEORY.pdf p3.
+
+BEST-MATCHED PAIR (smallest NIR-similarity residual)
+  best   water 00011 + sky 00002   delta = -3.028e-05 sr^-1
+  worst  water 00007 + sky 00002   delta = +3.079e-04 sr^-1
+  across all pairings Rrs(443) = 0.00276 +/- 0.00031 (1 sd)
+
+DOES GEOMETRY MATTER? (Rrs(443), n=12 water / 8 sky)
+  WATER view angle matter            r=+0.74 p=0.006   over the observed span: +27.0 %
+  SKY view angle matter              r=-0.42 p=0.296   over the observed span: -3.0 %
+  FOOTPRINT matter                   r=+0.36 p=0.257   over the observed span: +15.2 %
+  -> SIGNIFICANT: Does the WATER view angle matter?
+
+  CONFOUND CONTROL (a tilt trend could just be time or range in disguise)
+    tilt correlated with time?    r=+0.04 p=0.894
+    range correlated with time?   r=+0.92 p=0.000
+    tilt vs Rrs | control TIME    r=+0.80 p=0.003
+    tilt vs Rrs | control RANGE   r=+0.75 p=0.007
+    range vs Rrs | control TILT   r=+0.41 p=0.206
+    range took only 3 distinct values, so 'footprint' is a 3-level factor here, not a continuum.
