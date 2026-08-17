@@ -120,6 +120,31 @@ The spec builds with a **console window on purpose** (`CONSOLE = True` in
 station it shows you nothing at all, and a traceback you can read is worth more than a
 clean taskbar. Flip the flag if you disagree.
 
+**No Python is needed on the tablet.** PyInstaller bundles the CPython interpreter and the
+standard library inside the one 12 MB file. No install, no pip, no internet, no admin
+rights. It is a Windows **x86-64 console** binary; it does not run on macOS or Linux, and
+for those use Route B.
+
+#### ⚠ Windows will block it the first time. Do this at home, not at the shore.
+
+The exe is **not code-signed** (certificates cost money and this is a research tool), and
+anything downloaded from the internet gets tagged with the Mark-of-the-Web. So on first
+launch Windows Defender SmartScreen shows **"Windows protected your PC"** and only offers
+a *Don't run* button. It is not broken:
+
+1. Click **More info**, then **Run anyway**.
+2. Better, do it once up front: right-click `fieldrrs.exe` → **Properties** → tick
+   **Unblock** at the bottom → **OK**. That strips the Mark-of-the-Web and SmartScreen
+   stops asking.
+
+Some antivirus also quarantines fresh unsigned PyInstaller binaries on sight, because
+self-extracting executables look like packers. Add an exclusion for the folder if so.
+
+**Launch it once on the actual tablet before the field day**, with the demo data, and
+confirm you get a spectrum. If the tablet is centrally managed and policy blocks unsigned
+executables outright, you cannot argue with that in the field: use **Route B** below, which
+is a normal Python install and is not subject to the same policy.
+
 ### Route B — run from source (already tested, works today)
 
 1. Copy the whole `fieldrrs` folder to the tablet, e.g. `C:\fieldrrs`.
