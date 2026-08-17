@@ -1,7 +1,22 @@
 # fieldrrs
 
 Spectral Evolution `.sed` scans in, remote-sensing reflectance out. Runs on a Windows
-field tablet with **nothing installed but Python**. No pip, no internet, no numpy.
+field tablet with **nothing installed at all**. No Python, no pip, no internet, no numpy.
+
+## ⬇ Download
+
+### **[fieldrrs.exe](https://github.com/tmittal22/fieldrrs/releases/latest/download/fieldrrs.exe)**  ·  Windows, 12 MB, no install
+
+[![download](https://img.shields.io/badge/download-fieldrrs.exe-2e7d32?style=for-the-badge&logo=windows)](https://github.com/tmittal22/fieldrrs/releases/latest/download/fieldrrs.exe)
+[![field card](https://img.shields.io/badge/print-FIELD__CARD.pdf-c0392b?style=for-the-badge)](https://github.com/tmittal22/fieldrrs/releases/latest/download/FIELD_CARD.pdf)
+[![theory](https://img.shields.io/badge/read-THEORY.pdf-1f7a99?style=for-the-badge)](https://github.com/tmittal22/fieldrrs/releases/latest/download/THEORY.pdf)
+
+Those links always point at the newest release. No GitHub account needed.
+[All files ›](https://github.com/tmittal22/fieldrrs/releases/latest)
+
+> **First launch: Windows will block it.** It is unsigned, so SmartScreen says *"Windows
+> protected your PC"*. Right-click the file → **Properties** → tick **Unblock** → OK, or
+> click **More info** → **Run anyway**. **Do this at home, not at the shore.**
 
 ## What this does, in one table
 
