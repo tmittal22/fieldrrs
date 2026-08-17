@@ -682,6 +682,30 @@ def f_chi2(wl, mean, ssd, oc4, out):
     fig.tight_layout(rect=(0, 0, 1, 0.92))
     p = os.path.join(out, "giop9_chi2_weighting.png")
     fig.savefig(p, dpi=135); plt.close(fig)
+
+    # The ranked table is the point of the figure, so it must also exist as numbers.
+    with open(os.path.join(out, "giop_assumption_arms.csv"), "w", newline="") as fh:
+        w = csv.writer(fh)
+        w.writerow(["# every arm of the assumption sweep, ranked by chi2. "
+                    "nu=%d, sigma = the measured per-band uncertainty in FINAL_Rrs.csv"
+                    % nu])
+        w.writerow(["# admissible = chi2_nu <= 2 x best (a STATED cut, not a "
+                    "confidence level -- see LOC1_GIOP_FINDINGS.md 2b/2c)"])
+        w.writerow(["arm", "family", "chi2", "chi2_nu", "weight_avni", "admissible",
+                    "M_phi", "adg443", "bbp443", "S_dg", "eta"])
+        for i in np.argsort(C):
+            a_ = arms[i]
+            w.writerow([a_[0], a_[1], "%.4f" % C[i], "%.4f" % (C[i] / nu),
+                        "%.6g" % wgt[i], int(adm[i]), "%.6g" % a_[3],
+                        "%.6g" % a_[4], "%.6g" % a_[5], "%.6g" % a_[6],
+                        "%.6g" % a_[7]])
+        w.writerow([])
+        w.writerow(["# chi2 surface minimum over (S_dg, eta), 34x34 grid"])
+        w.writerow(["S_dg_best", "%.6g" % sd[k[1]], "eta_best", "%.6g" % et[k[0]],
+                    "chi2_nu_best", "%.6g" % Z.min()])
+        w.writerow(["# residual autocorrelation of the GIOP-default fit"])
+        w.writerow(["lag1_rho", "%.6g" % rho1, "n_bands", n, "n_eff_AR1",
+                    "%.4g" % neff])
     return p, arms, C, wgt, nu, rho1, neff, (sd[k[1]], et[k[0]], Z.min()), adm
 
 

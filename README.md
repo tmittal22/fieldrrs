@@ -308,15 +308,50 @@ write_rrs_csv("station1_rrs.csv", res)
 ## Tests
 
 ```
-python tests/test_fieldrrs.py
+python tests/test_fieldrrs.py                  # 111, the package, standard library only
+python -m pytest tests/test_field_day.py -q    # 26, the field-day scripts (needs numpy)
 ```
 
-58 tests, standard library only. They build `.sed` files from a **known** R_rs, read them
-back through the full chain, and check the physics inverts to 9 decimal places, with
-controls confirming that a wrong rho, a wrong panel reflectance, and the turbid-water
-`nir_zero` failure mode all change the answer in the direction they should. One test
-asserts the package imports nothing outside the standard library, because that is the
-property the field deployment depends on.
+The package suite builds `.sed` files from a **known** R_rs, reads them back through the
+full chain, and checks the physics inverts to 9 decimal places, with controls confirming
+that a wrong rho, a wrong panel reflectance, and the turbid-water `nir_zero` failure mode
+all change the answer in the direction they should. One test asserts the package imports
+nothing outside the standard library, because that is the property the field deployment
+depends on.
+
+The field-day suite covers the scripts: role classification from spectral shape, the
+60 m location clustering, the header parser (which must read **from the right**, because
+unquoted commas appear in the free-text fields), and `assert_same_dataset`, which must
+raise rather than silently pair a water scan against a sky scan from another station.
+
+## Processing a whole field day
+
+The package above handles one station. A field day of dozens of scans across several
+locations is handled by the scripts in this directory, documented end to end in
+**[`FIELD_DAY_WORKFLOW.md`](FIELD_DAY_WORKFLOW.md)** — every script, in order, with the
+command, what it writes, and what to look at.
+
+| script | what it does |
+|---|---|
+| `survey_field_data.py` | one line per `.sed`: time, position, geometry, and the role inferred from spectral shape |
+| `organize_by_location.py` | clusters at 60 m into `by_location/LOC*/​<FOREOPTIC>_FOV*/` |
+| `make_location_map.py` | station map on satellite imagery (`basemap.py` mosaics the tiles) |
+| `verify_field_calcs.py` | **six checks on the arithmetic, run before any inversion** |
+| `analyse_location.py` | the 12-figure per-location analysis, `REPORT.txt`, `FINAL_Rrs.csv`, and the figure index |
+| `make_interactive_report.py` | the same as zoomable plotly, `REPORT.html` |
+| `make_giop_figures.py` | the GIOP inversion of that spectrum, 10 figures + 2 CSVs |
+| `analysis_solar_window.py` | the 30–60° solar window, computed rather than adopted |
+| `make_field_card.py`, `make_theory_pdf.py` | the printable field card and the theory PDF |
+
+Theory notes: **[`THEORY_SCALED_MEAN.md`](THEORY_SCALED_MEAN.md)** (how the final spectrum
+is formed from replicate scans, and why the plain mean misreports the uncertainty) and
+**[`THEORY_GIOP_NOTE.md`](THEORY_GIOP_NOTE.md)** (what the inversion fits, what it assumes,
+and how to grade a fit with χ² when the residual is systematic).
+
+Worked result: **[`LOC1_GIOP_FINDINGS.md`](LOC1_GIOP_FINDINGS.md)** — what the
+concentrations are worth, including two corrections that inverted earlier conclusions.
+**[`NEXT_CAMPAIGN.md`](NEXT_CAMPAIGN.md)** — what to change in the field, ordered by gain
+per unit effort, every number measured in this repository rather than adopted as advice.
 
 ## What this is not, and what to use next
 
