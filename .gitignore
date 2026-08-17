@@ -5,3 +5,5 @@ dist/
 *.egg-info/
 demo_scans/
 tests/data/
+.tilecache/
+results_20260816/

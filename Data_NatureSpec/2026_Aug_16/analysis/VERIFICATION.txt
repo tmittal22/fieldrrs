@@ -1,0 +1,47 @@
+VERIFYING 60 scans -> 5 stations, 33 water spectra
+
+V1  ALGEBRA -- independent re-derivation, no package code
+  PASS  hand-computed R_rs == fieldrrs                 max|diff| = 0.000e+00
+  PASS  rrs_three_scan is deterministic                max|diff| = 0.000e+00
+
+V2  THE INSTRUMENT -- DARWin's own Reflect. column as an oracle
+  PASS  agrees with DARWin, 450-700 nm (median)        worst median |diff| 0.219 %
+  PASS  and carries NO systematic bias                 worst |mean signed residual| 0.0302 % against 0.435 % scatter
+  PASS    so rad_target and rad_ref are not swapped    a swap would give the reciprocal, ~10^2 off
+      Scatter is SNR-driven: it tracks 1/L_t, worst at 720-750 nm where the
+      water radiance is lowest. Unbiased, so it contributes ~0.08 % to a
+      33-scan station mean.
+
+V3  PHYSICS -- inferred E_d against the true solar constant
+      ref=0.3067  sun 35.5 deg  ->  median T(450-650) = 0.919
+      ref=0.2788  sun 36.1 deg  ->  median T(450-650) = 0.824
+      ref=0.2383  sun 33.9 deg  ->  median T(450-650) = 0.745
+      ref=0.2318  sun 31.4 deg  ->  median T(450-650) = 0.776
+      ref=0.2291  sun 31.9 deg  ->  median T(450-650) = 0.756
+  PASS  transmittance is physically possible (0<T<1)   range 0.745-0.919
+  PASS  and consistent with a clear-to-hazy sky (0.4-0.95) a wrong panel reflectance or unit error would fall outside
+
+V4  ROUND TRIP -- rebuild L_t from R_rs
+  PASS  L_t reconstructed from R_rs                    worst rel error 1.82e-16
+
+V5  SENSITIVITY -- what actually moves the answer
+      rho=0.022  Rrs(443)=0.00382 (+9.1%)  Rrs(555)=0.01007 (+1.3%)
+      rho=0.028  Rrs(443)=0.00350 (+0.0%)  Rrs(555)=0.00995 (+0.0%)
+      rho=0.035  Rrs(443)=0.00313 (-10.6%)  Rrs(555)=0.00980 (-1.5%)
+      rho=0.045  Rrs(443)=0.00260 (-25.7%)  Rrs(555)=0.00959 (-3.6%)
+      R_panel=0.95  Rrs(443)=0.00336 (-4.0%)
+      R_panel=0.99  Rrs(443)=0.00350 (+0.0%)
+      R_panel=1.00  Rrs(443)=0.00354 (+1.0%)
+  PASS  rho dominates, as the error budget says        rho 0.022->0.045 moves Rrs(443) by 32%
+
+V6  CONSERVATION -- physical bounds on every retrieved spectrum
+  PASS  no negative R_rs in 400-700 nm                 0 negative samples
+  PASS  R_rs below the 1/pi isotropic ceiling          max R_rs = 0.0122 sr^-1 (limit 0.318)
+  PASS  R_rs collapses in the NIR for nearly all scans 2 of 33 scans exceed NIR/green = 0.25 (worst 0.462)
+      FLAGGED, inspect before using: 00058 (0.46), 00059 (0.27)
+      High NIR means very high suspended sediment OR residual surface reflection.
+      It is a property of those spectra, not of the arithmetic.
+  PASS  every spectrum peaks green, not blue           consistent with sediment-laden water
+
+========================================================================
+ALL CHECKS PASSED

@@ -1,0 +1,29 @@
+FIELD REPORT  Data_NatureSpec/2026_Aug_16
+==============================================================================
+Position   66.89718 N, 162.60287 W  (Kotzebue Sound, Alaska)
+Date       08/16/2026   GPS 20:24-22:11 UTC
+Sun        31.4-36.2 deg elevation -> PREFERRED
+Scans      60 total: 33 water, 23 sky, 4 vegetation (excluded)
+Sites      4 occupations, 5 stations (one per panel reference)
+Grid       350-2500 nm, 2151 channels; usable on water to ~900 nm
+
+station    sky  wat   Rrs(443)  Rrs(555)   peak_nm  NIR/grn   skyspr
+------------------------------------------------------------------------
+0.3067       3    4    0.00346   0.01010       701    0.261     5.0%
+0.2788       3    5    0.00396   0.00972       587    0.300     6.5%
+0.2383       9   12    0.00361   0.01086       570    0.093    12.6%
+0.2318       4    1    0.00267   0.00886       571    0.105     6.7%
+0.2291       4   11    0.00275   0.00887       571    0.100     9.2%
+
+GIOP inversion (6 bands, per station mean)
+station         OC4 chl |   DC M_phi    DC adg    DC bbp | bd M_phi   bd adg   bd bbp
+------------------------------------------------------------------------------------
+0.3067            10.28 |       -999      -999      -999 |      314       20     2.24
+0.2788             7.10 |       -999      -999      -999 |      391       20     2.65
+0.2383            12.39 |       -999      -999      -999 |      111     2.45    0.603
+0.2318            10.09 |         11      1.33    0.0897 |     47.3     2.85     0.27
+0.2291             9.33 |        146      6.24     0.729 |     52.6        3    0.297
+
+WARNING  2 of 5 bounded a_dg(443) sit exactly ON the 20 m^-1 bound.
+         A railed parameter is NOT a measurement. GIOP's 3-component basis
+         cannot represent this water; the bound is absorbing the misfit.
