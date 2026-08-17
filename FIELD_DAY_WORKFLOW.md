@@ -223,7 +223,7 @@ then re-run the loop (or just steps 3–9) on the new sub-station folders it cre
 
 | location | scans | foreoptic | steps 0–6 | GIOP | notes |
 |---|---|---|---|---|---|
-| **LOC1** 66.89718 N 162.60290 W | 22 (12 water) | FLENS8 (8°) | **done** | **done** | one population; step 5 (run retroactively this session) flags 00005/00007 as glint-correctable — **not yet applied to `FINAL_Rrs.csv`, open item, see `PAPER_READINESS.md`** |
+| **LOC1** 66.89718 N 162.60290 W | 22 (12 water) | FLENS8 (8°) | **done** | **done** | one population; step 5 (run retroactively this session) flags 00005/00007 as glint-correctable — **not yet applied to `FINAL_Rrs.csv`, open item, see `Data_NatureSpec/2026_Aug_16/PAPER_READINESS.md`** |
 | **LOC2a** (main) 66.89677 N 162.57953 W | 9 water | FLENS8 (8°) | **done** | **done** | 00035 glint-corrected via `--glint nir_similarity`, verified to collapse back into the group |
 | **LOC2b** (disturbed) | 3 water | FLENS8 (8°) | **done** | **done** | real, not artefact, n=3 — report with the weaker-n caveat |
 | **LOC2c** (algae mat) | 2 | FLENS8 (8°) | **n/a — reflectance, not R_rs** | n/a | one figure + REPORT.txt by design (`analyse_algae_mat.py`); not the 13-figure R_rs pipeline, see its own module docstring for why |
@@ -231,10 +231,13 @@ then re-run the loop (or just steps 3–9) on the new sub-station folders it cre
 | **LOC3-FIBR15 (murky)** | 2 water | FIBR15 (15°) | **done** | **done** | 00058/00059, high-sediment pair, split out same pattern as LOC2b; step 5 structurally skips at n=2 (writes why) |
 | **LOC3-FLENS8** | 4 water | FLENS8 (8°) | **done** | **done** | see `LOC3_BOTTOM_CAVEAT.md` before quoting anything — every LOC3 sub-station's composition numbers are conditional on optical depth, which is unmeasured |
 
-`by_location/LOC2_66.89677N_162.57953W/` (the pre-split, unified copy) is **superseded**
-by 2a/2b/2c above — do not read from it or recreate it, the split is permanent. (Queued
-for removal as a duplicate; if it is still present, treat 2a/2b/2c as authoritative
-regardless.)
+`by_location/LOC2_66.89677N_162.57953W/` (the pre-split folder) is **NOT a duplicate to
+delete** — every raw `.sed`/`.jpg` under LOC2a/2b/2c is a **symlink back into it**
+(`organize_by_location.py` copied the originals there once; the split added symlinks
+rather than a second copy), so it is the one real backing store for all three. Its own
+`analysis/water_scans/REPORT.txt` is also cited by name in `LOC2_SPLIT.md` as the
+original evidence that found the heterogeneity in the first place — keep it. Read
+results from 2a/2b/2c, never from here, but do not remove this folder.
 
 **LOC2 is not one water population** — `analyse_water_scans.py` found 3 of its 12 water
 scans (00027–29) are physically different water (disturbed sediment, settling over
@@ -257,17 +260,22 @@ to be the one place in the dataset where the footprint question could be answere
 properly. It could not: range differed between foreoptics and they were used 23 minutes
 apart, both confounds independent of FOV. At LOC1 range took just 3 values and correlates
 with time at r = 0.92, so footprint and time are confounded there too, for a different
-reason. See `LOC3_FOOTPRINT_COMPARISON.md` for what a real test would need.
+reason. See LOC3's own `LOC3_FOOTPRINT_COMPARISON.md` (next to `LOC3_BOTTOM_CAVEAT.md`,
+in the LOC3 site folder — one file covering all three LOC3 sub-stations, not repeated per
+sub-station) for what a real test would need.
 
 ## Where the cross-station and synthesis results live
 
 Everything above is per-station. Once every station in a field day is done, these pull
-it together — all written this session, all cite live numbers back to a specific run:
+it together, living next to that day's own data (not at the repo root, since they are
+specific to this field day, not to the pipeline) — all cite live numbers back to a
+specific run:
 
 | doc | question it answers |
 |---|---|
 | `Data_NatureSpec/<day>/GLOBAL_COMPARISON.md` | R_rs and GIOP composition across every station, one table |
-| `RHO_METHODOLOGY_REVIEW.md` | how to get a better ρ than the flat Mobley (1999) default — recovers real ASOS wind speed after the fact |
-| `SKY_CHOICE_SYNTHESIS.md` | does the sky-scan choice matter (answer: no, at every station, for a stated geometric reason) |
-| `LOC3_FOOTPRINT_COMPARISON.md` | why the FOV/footprint question could not be answered cleanly this field day |
-| `PAPER_READINESS.md` | what is quotable now, what is conditional, what is still open, ranked by value per unit of future field effort |
+| `Data_NatureSpec/<day>/RHO_METHODOLOGY_REVIEW.md` | how to get a better ρ than the flat Mobley (1999) default — recovers real ASOS wind speed after the fact |
+| `Data_NatureSpec/<day>/SKY_CHOICE_SYNTHESIS.md` | does the sky-scan choice matter (answer: no, at every station, for a stated geometric reason) |
+| `Data_NatureSpec/<day>/by_location/LOC3_.../LOC3_FOOTPRINT_COMPARISON.md` | why the FOV/footprint question could not be answered cleanly this field day |
+| `Data_NatureSpec/<day>/PAPER_READINESS.md` | what is quotable now, what is conditional, what is still open, ranked by value per unit of future field effort |
+| `<station>/analysis/GIOP/LOC*_GIOP_FINDINGS.md` | the station-specific GIOP verdict — co-located with that station's own GIOP output, or (LOC3) at the shared site folder when one file covers several sub-stations |

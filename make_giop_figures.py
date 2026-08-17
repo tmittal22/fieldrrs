@@ -1186,10 +1186,11 @@ def write_giop_index(outdir, tag, mean_row, nu, findings_name):
          "reads `../FINAL_Rrs.csv` and the scans themselves. This file is REGENERATED "
          "on every run -- do not hand-edit it, edit the script instead.", "",
          "Uses **our** port, `tmittal22/giop-workbench`, not upstream MATLAB.", ""]
-    # The findings doc lives EITHER right here (LOC2a/2b style) or up at the repo root
-    # (LOC1's, written before that convention existed) -- search upward rather than
-    # assume one location, so this does not repeat the "file exists, path is wrong"
-    # mistake against whichever layout a station happens to use.
+    # The findings doc lives EITHER right here (LOC2a/2b/LOC1 style, one file per
+    # station) or at the shared site-level parent folder (LOC3 style, one file covering
+    # several sub-stations) -- search upward rather than assume one location, so this
+    # does not repeat the "file exists, path is wrong" mistake against whichever layout
+    # a station happens to use.
     fnd_rel = None
     d = os.path.abspath(outdir)
     script_root = os.path.dirname(os.path.abspath(__file__))

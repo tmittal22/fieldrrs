@@ -337,11 +337,12 @@ command, what it writes, and what to look at.
 | `organize_by_location.py` | clusters at 60 m into `by_location/LOC*/​<FOREOPTIC>_FOV*/` |
 | `make_location_map.py` | station map on satellite imagery (`basemap.py` mosaics the tiles) |
 | `verify_field_calcs.py` | **six checks on the arithmetic, run before any inversion** |
-| `analyse_location.py` | the 12-figure per-location analysis, `REPORT.txt`, `FINAL_Rrs.csv`, and the figure index |
-| `make_interactive_report.py` | the same as zoomable plotly, `REPORT.html` |
-| `make_giop_figures.py` | the GIOP inversion of that spectrum, 10 figures + 2 CSVs |
-| `analysis_solar_window.py` | the 30–60° solar window, computed rather than adopted |
+| `analyse_location.py` | the 13–14-figure per-location analysis, `REPORT.txt`, `FINAL_Rrs.csv`, and the figure index |
 | `analyse_water_scans.py` | per-scan QC when the water may NOT be one population: shape-angle clustering, a falsifiable glint collapse test (Ruddick et al. 2006), and photo contact sheets |
+| `make_interactive_report.py` | the same as zoomable plotly, `REPORT.html` |
+| `make_giop_figures.py` | the GIOP inversion of that spectrum, 12 figures + 2 CSVs |
+| `make_all_spectra_figs.py` | every individual scan's spectrum (not just the mean), one figure per station plus a cross-sub-case site summary |
+| `analysis_solar_window.py` | the 30–60° solar window, computed rather than adopted |
 | `analyse_algae_mat.py` | opaque-target reflectance for a floating vegetation/algae target — a different physical quantity from R_rs |
 | `make_field_card.py`, `make_theory_pdf.py` | the printable field card and the theory PDF |
 
@@ -350,10 +351,14 @@ is formed from replicate scans, and why the plain mean misreports the uncertaint
 **[`THEORY_GIOP_NOTE.md`](THEORY_GIOP_NOTE.md)** (what the inversion fits, what it assumes,
 and how to grade a fit with χ² when the residual is systematic).
 
-Worked result: **[`LOC1_GIOP_FINDINGS.md`](LOC1_GIOP_FINDINGS.md)** — what the
-concentrations are worth, including two corrections that inverted earlier conclusions.
-**[`NEXT_CAMPAIGN.md`](NEXT_CAMPAIGN.md)** — what to change in the field, ordered by gain
-per unit effort, every number measured in this repository rather than adopted as advice.
+Worked results live next to each field day's own data, not at the repo root, since they
+are specific to that day's stations: e.g. for 2026-08-16,
+**[`LOC1_GIOP_FINDINGS.md`](Data_NatureSpec/2026_Aug_16/by_location/LOC1_66.89718N_162.60290W/FLENS8_FOV08/analysis/GIOP/LOC1_GIOP_FINDINGS.md)**
+— what the concentrations are worth, including two corrections that inverted earlier
+conclusions — and
+**[`NEXT_CAMPAIGN.md`](Data_NatureSpec/2026_Aug_16/NEXT_CAMPAIGN.md)** — what to change in
+the field, ordered by gain per unit effort, every number measured in this repository
+rather than adopted as advice.
 
 ## What this is not, and what to use next
 
