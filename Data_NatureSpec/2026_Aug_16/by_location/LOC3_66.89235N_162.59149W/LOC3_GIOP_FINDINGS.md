@@ -79,7 +79,7 @@ whether the light came from the place the model assumes.
 second R_rs peak near 805–810 nm — sits entirely **outside** that window. Visually
 confirmed in `giop6_all_fits.png` at every LOC3 sub-station: the fit panels stop at
 700 nm and never show the 800 nm feature at all. So the RMS numbers in §A (2.8–6.0%,
-better than LOC1's 8.8%) describe how well GIOP's smooth basis reproduces the visible-
+better than LOC1's 8.5–8.6%) describe how well GIOP's smooth basis reproduces the visible-
 light shape — a fit can be "good" there while being completely blind to the part of the
 spectrum that actually distinguishes bottom-influenced water from deep water. **A good
 GIOP fit is not evidence against the bottom-reflectance caveat; it simply isn't a test

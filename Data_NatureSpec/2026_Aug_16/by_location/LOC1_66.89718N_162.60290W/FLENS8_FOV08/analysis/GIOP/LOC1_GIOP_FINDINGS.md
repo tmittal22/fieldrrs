@@ -9,6 +9,15 @@ definitions in `THEORY_GIOP_NOTE.md`; how to reproduce in `FIELD_DAY_WORKFLOW.md
 > each names a mistake worth not repeating. §1–§5 at the bottom are the ORIGINAL
 > six-band analysis and are **superseded in almost every number** — kept for provenance
 > only, not for quoting.
+>
+> **⚠ 2026-08-18: `FINAL_Rrs.csv` was regenerated** with `--glint nir_similarity`
+> (00005/00007 corrected — `PAPER_READINESS.md` §2d0). §A1's table and the "1.93%"
+> uncertainty figure throughout this file are updated to the corrected run, freshly
+> re-verified from `giop_FINAL.csv`. Everything else in §A2–§A5 (S_dg routes, per-scan
+> gain, the χ² map) was NOT individually re-run against the correction — a_dg/b_bp moved
+> <0.3% and RMS misfit <0.2 pp, so those numbers are very unlikely to have moved
+> meaningfully, but treat them as "probably still right", not "reconfirmed", until they
+> are.
 
 ---
 
@@ -16,16 +25,16 @@ definitions in `THEORY_GIOP_NOTE.md`; how to reproduce in `FIELD_DAY_WORKFLOW.md
 
 ### A1. Nothing in the GIOP family fits this water
 
-Against the **measured** per-band uncertainty (median 1.93 % of R_rs), ν = 298:
+Against the **measured** per-band uncertainty (median 1.80 % of R_rs), ν = 298:
 
 | configuration | free parameters | χ²_ν | RMS misfit |
 |---|---|---|---|
-| constrained (GIOP-DC: S_dg = 0.018, η from QAA) | 3 amplitudes | **74.5** | 10.9 % |
-| free (S_dg, η fitted — still OC4-seeded) | 5 | **18.1** | 8.5 % |
-| **maximum freedom** (+ a*_φ family/seed released) | 5 + seed profiled | **17.2** | 8.8 % |
-| *a good fit would be* | | *≈ 1* | *≈ 1.9 %* |
+| constrained (GIOP-DC: S_dg = 0.018, η from QAA) | 3 amplitudes | **48.0** | 10.9 % |
+| free (S_dg, η fitted — still OC4-seeded) | 5 | **14.0** | 8.5 % |
+| **maximum freedom** (+ a*_φ family/seed released) | 5 + seed profiled | **13.9** | 8.6 % |
+| *a good fit would be* | | *≈ 1* | *≈ 1.8 %* |
 
-The best model in the family still misfits by **4.5× the measurement uncertainty**, and
+The best model in the family still misfits by **4.7× the measurement uncertainty**, and
 the residual is one smooth curve (lag-1 ρ = 0.9964), identical in all 12 scans. Every
 number below is a projection onto a basis that cannot represent this spectrum.
 
@@ -89,14 +98,14 @@ OC4's 9.84 — **agreement to 14 %**.
 
 So the old "factor-2.4 internal contradiction" is dead twice over (once by going
 hyperspectral, once by this). But that agreement belongs to the **constrained** model,
-which fits at χ²_ν = 74. The arms that actually fit want **M_φ ≈ 1.7–2.3, about 5× less
+which fits at χ²_ν = 48. The arms that actually fit want **M_φ ≈ 2.2–2.3, about 5× less
 phytoplankton than OC4 reports**. Two Case-1 relations agreeing with each other is
 evidence about their shared calibration, not about this water.
 
 ### A6. Which assumption actually costs the fit
 
-Releasing S_dg and η: χ²_ν **74.5 → 18.1**. Additionally releasing the a*_φ family and
-seed: **18.1 → 17.2**. So the phytoplankton prescription — the assumption most obviously
+Releasing S_dg and η: χ²_ν **48.0 → 14.0**. Additionally releasing the a*_φ family and
+seed: **14.0 → 13.9**. So the phytoplankton prescription — the assumption most obviously
 wrong on Case-2 water — is **not** what the misfit is made of. The CDOM/detritus slope is.
 
 > ⚠ `fit_shapes=True` is **not** assumption-free: it builds a*_φ once from the OC4 seed

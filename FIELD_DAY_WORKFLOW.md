@@ -307,7 +307,7 @@ steps with a different `$D`.
 
 | location | scans | foreoptic | steps 0–6 | GIOP | notes |
 |---|---|---|---|---|---|
-| **LOC1** 66.89718 N 162.60290 W | 22 (12 water) | FLENS8 (8°) | **done** | **done** | one population; step 5 (run retroactively this session) flags 00005/00007 as glint-correctable — **not yet applied to `FINAL_Rrs.csv`, open item, see `Data_NatureSpec/2026_Aug_16/PAPER_READINESS.md`** |
+| **LOC1** 66.89718 N 162.60290 W | 22 (12 water) | FLENS8 (8°) | **done** | **done** | one population; `--glint nir_similarity` applied 2026-08-18 (00005/00007 were glint-correctable, same test/fix as LOC2a's 00035) — shape consistency 7.08%→3.68%, R_rs(555) 0.00865→0.00863 (−0.23%), GIOP composition unchanged; see `Data_NatureSpec/2026_Aug_16/PAPER_READINESS.md` §2d0 |
 | **LOC2a** (main) 66.89677 N 162.57953 W | 9 water | FLENS8 (8°) | **done** | **done** | 00035 glint-corrected via `--glint nir_similarity`, verified to collapse back into the group |
 | **LOC2b** (disturbed) | 3 water | FLENS8 (8°) | **done** | **done** | real, not artefact, n=3 — report with the weaker-n caveat |
 | **LOC2c** (algae mat) | 2 | FLENS8 (8°) | **n/a — reflectance, not R_rs** | n/a | one figure + REPORT.txt by design (`analyse_algae_mat.py`); not the 13-figure R_rs pipeline, see its own module docstring for why |

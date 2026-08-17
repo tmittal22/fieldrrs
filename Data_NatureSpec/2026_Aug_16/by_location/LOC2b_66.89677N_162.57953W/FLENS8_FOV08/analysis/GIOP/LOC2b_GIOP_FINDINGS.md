@@ -33,9 +33,11 @@ because they were taken 90 seconds apart from the same settling plume):
 LOC1.** RMS misfit — the station-comparable quantity — is 9.7 % here against LOC1's
 10.9 % and LOC2a's 8.2 %: **all three stations misfit by about the same relative
 amount.** χ²_ν diverges because σ does: LOC2b's median σ over 400–700 nm (0.16 %) is
-**~12× smaller** than LOC1's (1.93 %), and χ²_ν scales as 1/σ², so the same relative
-misfit alone predicts roughly a **150×** larger χ²_ν here — the right order of magnitude
-for the observed 16 055/74.5 ≈ 216× gap. The remaining factor is real (σ is not a single
+**~11× smaller** than LOC1's (1.80 % — 2026-08-18: LOC1's `FINAL_Rrs.csv` was corrected,
+`PAPER_READINESS.md` §2d0, which moved this from 1.93 %/74.5), and χ²_ν scales as 1/σ², so
+the same relative misfit alone predicts roughly a **127×** larger χ²_ν here — the right
+order of magnitude for the observed 16 055/48.0 ≈ 334× gap. The remaining factor is real
+(σ is not a single
 flat number, it varies band to band, and LOC2b's RMS is slightly *better* than LOC1's,
 which should if anything narrow the gap) but is not the point worth chasing further here:
 **χ²_ν is a σ-dependent quantity and is not comparable across stations**, full stop —

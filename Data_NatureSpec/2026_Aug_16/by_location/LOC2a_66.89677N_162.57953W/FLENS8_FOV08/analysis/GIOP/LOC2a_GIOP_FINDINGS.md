@@ -13,7 +13,7 @@ physics and the method — this file states only what differs at this station.
 ### A1. Nothing in the GIOP family fits well here either — and it fits noticeably better than LOC1
 
 Against the **measured** per-band uncertainty (median 0.77 %, tighter than LOC1's
-1.93 % — LOC2a's 9 scans agree in shape more closely than LOC1's 12 do):
+1.80 % — LOC2a's 9 scans agree in shape more closely than LOC1's 12 do):
 
 | configuration | free parameters | χ²_ν | RMS misfit |
 |---|---|---|---|
@@ -22,18 +22,20 @@ Against the **measured** per-band uncertainty (median 0.77 %, tighter than LOC1'
 | **maximum freedom** (+ a*_φ family/seed) | 5 + seed | **23.6** | **2.9 %** |
 | *a good fit would be* | | *≈ 1* | *≈ 0.8 %* |
 
-> ⚠ **Do not compare χ²_ν across stations.** LOC1's constrained χ²_ν was 74.5; LOC2a's is
-> 221.8 — three times worse-looking, despite LOC2a's RMS misfit (8.2 %) being *better*
-> than LOC1's (10.9 %). χ²_ν = Σ(Δ/σ)², and σ is each station's own **measured** shape
-> uncertainty. LOC2a's 9 scans happen to agree in shape more tightly than LOC1's 12 do
-> (0.77 % vs 1.93 % median σ), so the *same* relative misfit produces a *larger* χ²_ν —
-> roughly (1.93/0.77)² ≈ 6×, which is the right order of magnitude for the 3× gap
-> actually observed. **RMS misfit is the number that is comparable across stations; χ²_ν
-> is not**, and this is the clearest demonstration of that in the whole dataset.
+> ⚠ **Do not compare χ²_ν across stations.** LOC1's constrained χ²_ν is 48.0 (2026-08-18:
+> LOC1's `FINAL_Rrs.csv` was corrected, `PAPER_READINESS.md` §2d0, which also tightened
+> its σ and moved this number — was 74.5); LOC2a's is 221.8 — over four times
+> worse-looking, despite LOC2a's RMS misfit (8.2 %) being *better* than LOC1's (10.9 %).
+> χ²_ν = Σ(Δ/σ)², and σ is each station's own **measured** shape uncertainty. LOC2a's 9
+> scans happen to agree in shape more tightly than LOC1's 12 do (0.77 % vs 1.80 % median
+> σ), so the *same* relative misfit produces a *larger* χ²_ν — roughly (1.80/0.77)² ≈ 5.5×,
+> the right order of magnitude for the ~4.6× gap actually observed. **RMS misfit is the
+> number that is comparable across stations; χ²_ν is not**, and this is the clearest
+> demonstration of that in the whole dataset.
 
 **Maximum freedom fits much better here than at LOC1, relatively speaking.** At LOC1,
-releasing the a*_φ family bought almost nothing (χ²_ν 18.1 → 17.2, RMS 8.5 % → 8.8 %,
-actually *slightly worse* RMS). At LOC2a it buys a real gain (χ²_ν 104.3 → 23.6, RMS
+releasing the a*_φ family bought almost nothing (χ²_ν 14.0 → 13.9, RMS 8.5 % → 8.6 %,
+essentially flat). At LOC2a it buys a real gain (χ²_ν 104.3 → 23.6, RMS
 4.7 % → 2.9 %). The phytoplankton prescription matters more to the misfit at LOC2a than
 it did at LOC1 — see A5.
 

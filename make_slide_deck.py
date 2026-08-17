@@ -164,7 +164,7 @@ def main():
     _caption(s, "LOC2a — best fit of any station", Inches(6.7), Inches(4.55), Inches(6.3))
     _bullets(s, [
         ("Does releasing extra freedom (fitted a*_φ family/seed) actually help? It depends on the station:", 0, NAVY, True),
-        ("LOC1: barely. χ²_ν 18.1 (free) → 17.2 (max freedom), RMS misfit 8.5% → 8.8% — SLIGHTLY WORSE. Almost all of LOC1's gain happens earlier, constrained→free (χ²_ν 74.5→18.1).", 1, RGBColor(0x22,0x22,0x22), False),
+        ("LOC1: barely. χ²_ν 14.0 (free) → 13.9 (max freedom), RMS misfit 8.5% → 8.6% — essentially flat. Almost all of LOC1's gain happens earlier, constrained→free (χ²_ν 48.0→14.0).", 1, RGBColor(0x22,0x22,0x22), False),
         ("LOC2a: substantially. χ²_ν 104.3 (free) → 23.6 (max freedom) — a real 4.4× drop, RMS 4.7%→2.9%.", 1, RGBColor(0x22,0x22,0x22), False),
         ("LOC2b: same pattern. χ²_ν 6199 → 999, a 6.2× drop, RMS 4.2%→2.9%.", 1, RGBColor(0x22,0x22,0x22), False),
         ("LOC1's residual is NOT a missing-parameter problem — it's traced to the blue band specifically (12.75% RMS there alone, worst +38%), where LOC1's high a_dg makes a wrong CDOM-slope shape assumption costly", 0, RED, True),
@@ -176,11 +176,10 @@ def main():
         ("LOC1_66.89718N_162.60290W/FLENS8_FOV08", "LOC1",
          "Reference station  ·  22 scans (12 water, 8 sky, 2 land targets)  ·  FLENS8 (8° FOV)",
          [
-             ("R_rs(555) = 0.00865 sr⁻¹  ·  one clean water population (12/12 kept)", 0, RGBColor(0x22,0x22,0x22), False),
+             ("R_rs(555) = 0.00863 sr⁻¹  ·  one clean water population (12/12 kept)", 0, RGBColor(0x22,0x22,0x22), False),
              ("GIOP (free): a_dg(443)=0.78 m⁻¹, b_bp(443)=0.043 m⁻¹  ·  highest CDOM of any station", 0, RGBColor(0x22,0x22,0x22), False),
-             ("Best-fit RMS misfit 8.8% — worst of the 6 stations, traced to the blue band (12.75% RMS there alone)", 0, RGBColor(0x22,0x22,0x22), False),
-             ("QC re-run this session found 2 of 12 scans (00005, 00007) are glint-correctable", 0, RED, True),
-             ("→ NOT yet applied to the reference product — open decision, see PAPER_READINESS.md §2d0", 1, RED, False),
+             ("Best-fit RMS misfit 8.5% — worst of the 6 stations, traced to the blue band (12.75% RMS there alone)", 0, RGBColor(0x22,0x22,0x22), False),
+             ("00005/00007 were glint-correctable (same test/fix as LOC2a's 00035) — applied: shape consistency 7.08%→3.68%, R_rs(555) moved only −0.23%, GIOP composition unchanged", 0, TEAL, False),
          ]),
         ("LOC2a_66.89677N_162.57953W/FLENS8_FOV08", "LOC2a — main open water",
          "9 scans  ·  glint-corrected (scan 00035, Ruddick et al. 2006 NIR-similarity)",
@@ -281,8 +280,6 @@ def main():
     s = prs.slides.add_slide(blank)
     _title(s, "Open items, ranked by value per unit of future field effort")
     _bullets(s, [
-        ("0. Decide on LOC1's 00005/00007 glint correction", 0, RED, True),
-        ("Zero field effort — a re-processing decision. The fix is already validated (identical to LOC2a's 00035) but not applied, since it moves the reference station's headline numbers.", 1, RGBColor(0x22,0x22,0x22), False),
         ("1. A depth measurement at LOC3", 0, NAVY, True),
         ("Cheapest fix available (a weighted line) — the only thing that converts the bottom-reflectance caveat into a resolved question.", 1, RGBColor(0x22,0x22,0x22), False),
         ("2. Record wind speed live at any future site not near an ASOS station", 0, NAVY, True),

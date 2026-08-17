@@ -63,8 +63,9 @@ panel; explicitly labelled as a different physical quantity, never merged with R
 end (400–490 nm), where LOC2b sits visibly above LOC2a — the same elevated-blue
 signature found independently in the per-scan spectral analysis, now visible directly in
 the final products. LOC1 sits below both LOC2 sub-stations in the blue and has a
-different balance between its 570 nm and 700 nm peaks. Headline R_rs(555): LOC1 0.00865,
-LOC2a 0.01081, LOC2b 0.01068 sr⁻¹.
+different balance between its 570 nm and 700 nm peaks. Headline R_rs(555): LOC1 0.00863
+(2026-08-18 glint-corrected, was 0.00865 — `PAPER_READINESS.md` §2d0), LOC2a 0.01081,
+LOC2b 0.01068 sr⁻¹.
 
 ## GIOP
 

@@ -5,6 +5,11 @@ FIBR15-main, LOC3 FIBR15-murky, LOC3 FLENS8) plus one non-water reflectance prod
 (LOC2c, algae). Figures: `by_location/COMPARISON/all_stations_overplot.png` (R_rs),
 `by_location/COMPARISON/giop_cross_station_all.png` (GIOP composition).
 
+⚠ **2026-08-18: LOC1's `FINAL_Rrs.csv` was regenerated** with `--glint nir_similarity`
+(00005/00007 corrected, `PAPER_READINESS.md` §2d0) — every LOC1-derived number below
+reflects the corrected product. a_dg/b_bp are unchanged to the precision quoted; RMS
+misfit and χ²_ν moved slightly (see §3).
+
 ## 1. R_rs: LOC1/LOC2 are optically deep; LOC3 is not
 
 LOC1 and LOC2 (both sub-populations) collapse smoothly toward zero past ~700 nm, as
@@ -43,7 +48,7 @@ pieces of code).
 
 | | best RMS misfit (max freedom) |
 |---|---|
-| LOC1 | 8.8% |
+| LOC1 | 8.6% |
 | LOC2a / LOC2b | 2.9% / 2.9% |
 | LOC3 FIBR15 / murky / FLENS8 | 5.1% / 2.8% / 6.0% |
 
@@ -57,8 +62,8 @@ the water-column physics is better resolved.
 
 **χ²_ν must never be compared across these six stations directly** — it scales with each
 station's own measured shape uncertainty (as small as 0.16% at LOC2b, n=3 near-duplicate
-scans, vs 1.93% at LOC1, n=12 genuinely independent replicates), so a χ²_ν of 16,000 at
-LOC2b and 74 at LOC1 does NOT mean LOC2b fits 200× worse — its RMS misfit is actually
+scans, vs 1.80% at LOC1, n=12 genuinely independent replicates), so a χ²_ν of 16,000 at
+LOC2b and 48 at LOC1 does NOT mean LOC2b fits 200× worse — its RMS misfit is actually
 *better* (9.7% vs 10.9%). Full arithmetic in `THEORY_GIOP_NOTE.md` §4 point 4.
 
 ## 4. What generalizes beyond this specific dataset

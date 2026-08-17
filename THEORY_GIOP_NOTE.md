@@ -196,27 +196,40 @@ the phytoplankton shape in every "free" fit reported here.
 
 The genuinely maximal arm (`_maxfree` in `make_giop_figures.py`) profiles the seed as
 well, over 10 Bricaud seeds **and** 6 Ciotti S_f values, and reports the best. On the
-LOC1 mean spectrum:
+LOC1 mean spectrum (⚠ 2026-08-18: LOC1's `FINAL_Rrs.csv` was corrected via
+`--glint nir_similarity`, `PAPER_READINESS.md` §2d0 — the table below is the corrected
+run; a_dg/b_bp/M_φ moved <0.3%, χ²_ν moved more because it also tracks the tightened
+measured σ, see `THEORY_GIOP_NOTE.md` §4 point 4 on why that's expected and not a
+fit-quality change):
 
 | arm | free parameters | M_φ | a_dg(443) | b_bp(443) | S_dg | η | χ²_ν |
 |---|---|---|---|---|---|---|---|
-| constrained (GIOP-DC) | 3 amplitudes | 11.47 | 1.254 | 0.0836 | 0.018 *fixed* | 0.169 *QAA* | **74.5** |
-| free (still OC4-seeded) | + S_dg, η | 2.26 | 0.779 | 0.0430 | 0.01176 | −1.000 | **18.1** |
-| **max freedom** (Bricaud seed 3) | + a*_φ family/seed | 1.68 | 0.781 | 0.0416 | 0.01144 | −1.000 | **17.2** |
+| constrained (GIOP-DC) | 3 amplitudes | 11.39 | 1.257 | 0.0832 | 0.018 *fixed* | 0.168 *QAA* | **48.0** |
+| free (still OC4-seeded) | + S_dg, η | 2.28 | 0.780 | 0.0429 | 0.01180 | −1.000 | **14.0** |
+| **max freedom** (Bricaud seed 8) | + a*_φ family/seed | 2.22 | 0.778 | 0.0427 | 0.01171 | −1.000 | **13.9** |
 
 Two things follow, and they point in opposite directions:
 
 - **The CDOM slope matters far more than the seed.** Releasing S_dg and η took χ²_ν from
-  74.5 to 18.1; additionally releasing the a*_φ family took it only to 17.2. So the a*_φ
+  48.0 to 14.0; additionally releasing the a*_φ family took it only to 13.9. So the a*_φ
   prescription — the assumption most obviously wrong on Case-2 water — is **not** what
   the misfit is made of.
-- **a_dg and b_bp are stable across the two free arms** (0.779 → 0.781, and 0.0430 →
-  0.0416, i.e. 0.2 % and 3 %). Once the shapes are free, those two stop caring about the
-  seed. **M_φ does not**: 2.26 → 1.68, and it was 11.47 constrained.
+- **a_dg and b_bp are stable across the two free arms** (0.780 → 0.778, and 0.0429 →
+  0.0427, both <1 %). Once the shapes are free, those two stop caring about the
+  seed. **M_φ does not**: 2.28 → 2.22, and it was 11.39 constrained.
 
 ### 4.1b Does the gain survive scan by scan? Yes, 12 of 12
 
-The mean-spectrum improvement (χ²_ν 74.5 → 18.1) could in principle be an artefact of
+⚠ **The table below is from the pre-2026-08-18 run and has NOT been individually
+re-verified against the corrected `FINAL_Rrs.csv`** — unlike the mean-spectrum table just
+above, which was freshly re-read from `giop_FINAL.csv`, this one requires re-deriving
+`giop11_chi2_crossplot.png`'s per-scan values, not just re-reading a summary CSV. Given
+the mean-spectrum numbers barely moved, these are very likely still accurate to the
+precision quoted, but "very likely" is not "reconfirmed" — re-run
+`make_giop_figures.py` and re-read the figure before citing these specific numbers.
+
+The mean-spectrum improvement (χ²_ν 74.5 → 18.1, the PRE-correction values these
+per-scan stats were computed against) could in principle be an artefact of
 averaging — one badly-fitting scan dragging a summary. `giop11_chi2_crossplot.png` puts
 the free χ²_ν against the constrained χ²_ν for each of the 12 angle-matched spectra
 independently:

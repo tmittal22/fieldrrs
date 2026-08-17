@@ -35,7 +35,7 @@ pieces of code).
 
 | | R_rs(555) | a_dg(443) | b_bp(443) |
 |---|---|---|---|
-| LOC1 | 0.00865 sr⁻¹ | 0.78 m⁻¹ | 0.043 m⁻¹ |
+| LOC1 | 0.00863 sr⁻¹ | 0.78 m⁻¹ | 0.043 m⁻¹ |
 | LOC2a (main) | 0.01066 sr⁻¹ | 0.49 m⁻¹ | 0.041–0.043 m⁻¹ |
 | LOC2b (disturbed) | 0.01068 sr⁻¹ | 0.33–0.49 m⁻¹* | 0.047–0.057 m⁻¹ |
 
@@ -98,23 +98,40 @@ LOC1/LOC2.** The murky pair's b_bp elevation (§1b-style corroboration, `LOC3_GI
 §A1) is the one LOC3 GIOP finding least affected by this, since it is corroborated by two
 methods that do not depend on optical-depth assumptions at all.
 
-### 2d0. LOC1 has the same glint defect LOC2a had — found this session, NOT yet fixed
+### 2d0. LOC1 had the same glint defect LOC2a had — found this session, now fixed (2026-08-18)
 `analyse_water_scans.py` had never been run at LOC1 (it postdates LOC1's original
-processing); running it retroactively for this completeness pass found 00005 and 00007
-(2 of 12 water scans) verdict `glint (correctable)` — mean shape-angle deviation from the
-group drops 2.74°/2.85° → 2.28°/2.40° under `--glint nir_similarity`, the same test and
-the same correction already trusted and applied at LOC2a's scan 00035. **Unlike 00035,
-this has NOT been applied to `FINAL_Rrs.csv`** — LOC1 was held bitwise-fixed all session
-as the regression anchor proving other changes weren't silently touching it, and flipping
-its own default is a step beyond that, not a natural extension of it: LOC1's numbers
-appear as "the" reference value throughout every doc in this dataset (§1b's table,
-`GLOBAL_COMPARISON.md`, both GIOP findings docs that compare against it), so correcting
-it changes a headline number others are already built on, not just one station's own
-figure. Recommend applying the same `--glint nir_similarity` fix used at LOC2a (the
-method is already validated, and leaving a known-correctable defect in the reference
-station while having fixed the identical defect at LOC2a is the inconsistent outcome) —
-but this is a call worth the user making explicitly rather than silently inheriting from
-the 00035 precedent, since it moves the one number every other station is compared to.
+processing); running it retroactively found 00005 and 00007 (2 of 12 water scans) verdict
+`glint (correctable)`, the same test that flagged LOC2a's scan 00035. This was left open
+for the user's explicit decision rather than silently applied (LOC1's numbers are "the"
+reference value throughout this dataset), and the user confirmed: apply it.
+
+**Applied via `--glint nir_similarity`, the same correction and code path as LOC2a's
+00035, re-run through the full pipeline (water QC, interactive report, GIOP, all-spectra
+figure, highlights, slide deck, all 4 cross-station comparison figures).** Verified
+before quoting anything from it:
+- **Shape consistency across the spectrum nearly doubled**: `shape_cv_pct` 7.08% → 3.68%
+  (the actual target of this correction).
+- **R_rs(555), the number everyone quotes, barely moved**: 0.00865 → 0.00863 sr⁻¹ (−0.23%).
+- **GIOP composition is essentially unchanged**: a_dg(443) 0.779→0.780, b_bp(443)
+  0.0430→0.0429 m⁻¹ (free config) — the retrieved water-column physics does not depend on
+  which 2 of 12 scans carried a residual NIR offset.
+- **RMS misfit is essentially unchanged** (8.5%→8.5% free, 8.8%→8.6% max freedom) — LOC1
+  remains the worst-fitting station regardless, confirming again (§3 below) that its
+  residual is the blue-band CDOM-slope mismatch, not scan-level noise.
+- Per-scan check before applying: the correction's magnitude on the two flagged scans
+  (offset 1.3–2.3×10⁻⁴ sr⁻¹) was NOT dramatically larger than on several scans the QC
+  tool calls clean (00006 alone: 2.4×10⁻⁴) — expected and correct for this method
+  (Ruddick et al. 2006 residual correction is computed per scan from each scan's own
+  R_rs(780)/R_rs(870), applied dataset-wide, not selectively to flagged scans only), and
+  confirmed not a problem by the shape-consistency and headline-number checks above: a
+  uniformly-applied, physically-motivated correction that tightens precision without
+  moving the answer is the signature of a real fix, not an over-correction.
+
+This is the one number in this document that changed after §1b/§3/§4 below were written;
+those sections are updated to match. The uncorrected `FINAL_Rrs.csv` is not specially
+archived, but is fully recoverable from git history at the commit before this fix
+(`git log -- <path to LOC1's analysis/FINAL_Rrs.csv>`) for anyone who wants to diff
+against it.
 
 ### 2d. The planned FOV/footprint test did not resolve
 LOC3 was meant to isolate footprint size (both foreoptics, "same water"). It could not:
@@ -128,11 +145,11 @@ dataset does.
 
 ## 3. Open items, ranked by value per unit of future field effort
 
-0. **Decide on LOC1's 00005/00007 glint correction (§2d0).** Zero field effort — this is
-   a re-processing decision, not a data-collection one, so it belongs ahead of the
-   field-effort-ranked list below rather than in it. The fix is already validated
-   (identical to LOC2a's 00035); the only reason it isn't applied is that the call — the
-   dataset's reference numbers moving — was left for the user rather than made silently.
+~~0. Decide on LOC1's 00005/00007 glint correction~~ — **RESOLVED 2026-08-18**, applied
+   (§2d0). Kept as a struck-through entry rather than deleted, since the reasoning for why
+   it was held open (a re-processing decision that moves the reference station's headline
+   numbers deserves an explicit call, not a silent inheritance from precedent) is itself
+   worth keeping visible for the next time a similar defect turns up somewhere else.
 1. **A depth measurement at LOC3.** Cheapest of everything below (a weighted line), and
    the only thing that converts §2c from a caveat into a resolved question.
 2. **Wind speed, recorded live, at any future site not near an ASOS station.** This

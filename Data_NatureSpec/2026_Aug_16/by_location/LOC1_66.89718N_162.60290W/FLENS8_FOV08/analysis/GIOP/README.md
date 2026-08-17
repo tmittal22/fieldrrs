@@ -62,6 +62,6 @@ chi2_nu is NOT comparable across stations with different measured shape uncertai
 
 | config | M_phi | a_dg(443) m^-1 | b_bp(443) m^-1 | chi2_nu (nu=298) | RMS misfit |
 |---|---|---|---|---|---|
-| constrained | 11.5 | 1.254 | 0.08362 | 74.5 | 10.9 % |
-| free | 2.26 | 0.779 | 0.043 | 18.1 | 8.5 % |
-| max freedom | 1.68 | 0.7808 | 0.04161 | 17.2 | 8.8 % |
+| constrained | 11.4 | 1.257 | 0.08317 | 48.0 | 10.9 % |
+| free | 2.28 | 0.7796 | 0.04285 | 14.0 | 8.5 % |
+| max freedom | 2.22 | 0.7783 | 0.04265 | 13.9 | 8.6 % |
