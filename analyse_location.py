@@ -951,6 +951,153 @@ def fig_final(water, sky, wl, outdir, tag, panel_r):
 
 
 
+# --------------------------------------------------------------- figure 11
+def fig_scaled_method(water, sky, wl, outdir, tag, panel_r):
+    """How the amplitude-normalised mean works, step by step. THEORY_SCALED_MEAN.md."""
+    import numpy as np
+    pairs = match_by_angle(water, sky)
+    R, names = [], []
+    for w, sk, _, _ in pairs:
+        r = rho_at_angle(view_zenith_from_tilt(w["spec"].tilt_y_deg))
+        R.append(rrs_three_scan(wl, w["spec"].columns["rad_target"],
+                                sk["spec"].columns["rad_target"],
+                                w["spec"].columns["rad_ref"], panel_r, r, "none").rrs)
+        names.append(w["n"])
+    wl_a = np.array(wl); m = (wl_a >= RLO) & (wl_a <= RHI)
+    X = np.array(R)[:, m]; lam = wl_a[m]
+    core = (lam >= 450) & (lam <= 700)
+
+    # run the iteration by hand so each step can be plotted
+    Xl = [list(x) for x in X]
+    hist_J, hist_a, Ms = [], [], []
+    M = X.mean(0)
+    for _ in range(8):
+        num = X @ M
+        den = np.einsum("ij,ij->i", X, X)
+        a = num / den
+        a = a / a.mean()
+        M = (X.T * a).T.mean(0)
+        hist_a.append(a.copy()); Ms.append(M.copy())
+        hist_J.append(float(np.sum(((X.T * a).T - M) ** 2)))
+    a = hist_a[-1]
+
+    fig, axes = plt.subplots(1, 3, figsize=(17, 5.0))
+    a0 = axes[0]
+    amp = 1.0 / a
+    norm = plt.Normalize(amp.min(), amp.max())
+    cm = plt.cm.viridis
+    for x, am in zip(X, amp):
+        a0.plot(lam, x, lw=1.1, color=cm(norm(am)), alpha=0.9)
+    a0.plot(lam, Ms[-1], lw=3.0, color="#c0392b", label="shape $S(\\lambda)$")
+    sm = plt.cm.ScalarMappable(norm=norm, cmap=cm); sm.set_array([])
+    plt.colorbar(sm, ax=a0, label="amplitude $c_i$ (relative)")
+    a0.legend(fontsize=9)
+    a0.set_ylabel("$R_{rs}$  sr$^{-1}$")
+    a0.set_title("MODEL   $R_i(\\lambda) = c_i\\,S(\\lambda) + \\varepsilon$\n"
+                 "colour = the fitted $c_i$: the spectra are one shape, scaled",
+                 fontsize=10.5, loc="left")
+
+    a1 = axes[1]
+    # J itself changes in the 6th significant figure after the first step, so plotting
+    # J on a linear axis shows a flat line. The EXCESS over the converged value is what
+    # demonstrates convergence.
+    Jinf = min(hist_J)
+    exc = [max((j - Jinf) / Jinf, 1e-17) for j in hist_J]
+    a1.semilogy(range(1, len(exc) + 1), exc, "o-", color="#2c6f9b", ms=7)
+    a1.set_xlabel("iteration")
+    a1.set_ylabel("$(J_k-J_\\infty)/J_\\infty$", color="#2c6f9b")
+    a1.grid(alpha=0.25)
+    a1b = a1.twinx()
+    drift = [float(np.max(np.abs(hist_a[k] - hist_a[k - 1]))) if k else np.nan
+             for k in range(len(hist_a))]
+    a1b.semilogy(range(1, len(drift) + 1), drift, "s--", color="#8a6000", ms=5,
+                 label="max $|\\Delta a_i|$")
+    a1b.set_ylabel("amplitude change per step", color="#8a6000")
+    a1.set_title("CONVERGENCE   alternate (6) and (7)\n"
+                 "each step is an exact minimiser, so $J$ cannot rise",
+                 fontsize=10.5, loc="left")
+
+    a2 = axes[2]
+    raw = X.std(0) / np.abs(X.mean(0)) * 100
+    res = (X.T * a).T.std(0) / np.abs(Ms[-1]) * 100
+    a2.plot(lam, raw, lw=2.0, color="#c0392b", label="before: %.1f %% (450-700)"
+            % float(np.mean(raw[core])))
+    a2.plot(lam, res, lw=2.4, color="#2e7d32", label="after:  %.1f %%"
+            % float(np.mean(res[core])))
+    a2.axvspan(450, 700, color="#2e7d32", alpha=0.07)
+    a2.set_ylabel("relative scatter (%)"); a2.legend(fontsize=9)
+    a2.set_ylim(0, min(40, float(np.nanmax(raw)) * 1.2))
+    a2.set_title("WHAT IT REMOVES\nthe amplitude term, eq. (4), which is identical\n"
+                 "in every band; the tails stay noisy because $R_{rs}\\to 0$ there",
+                 fontsize=10.5, loc="left")
+    for ax_ in (a0, a2):
+        ax_.set_xlabel("wavelength (nm)"); ax_.grid(alpha=0.25); ax_.set_xlim(RLO, RHI)
+    fig.suptitle("%s — the amplitude-normalised mean, method" % tag, fontsize=13,
+                 weight="bold")
+    fig.tight_layout(rect=(0, 0, 1, 0.90))
+    pth = os.path.join(outdir, "fig11_scaled_mean_method.png")
+    fig.savefig(pth, dpi=140); plt.close(fig)
+    return pth
+
+
+# --------------------------------------------------------------- figure 12
+def fig_final_mean(water, sky, wl, outdir, tag, panel_r):
+    """The deliverable on its own: mean R_rs with the two uncertainties separated."""
+    import numpy as np
+    pairs = match_by_angle(water, sky)
+    R = []
+    for w, sk, _, _ in pairs:
+        r = rho_at_angle(view_zenith_from_tilt(w["spec"].tilt_y_deg))
+        R.append(rrs_three_scan(wl, w["spec"].columns["rad_target"],
+                                sk["spec"].columns["rad_target"],
+                                w["spec"].columns["rad_ref"], panel_r, r, "none").rrs)
+    wl_a = np.array(wl); m = (wl_a >= RLO) & (wl_a <= RHI)
+    X = np.array(R)[:, m]; lam = wl_a[m]
+    core = (lam >= 450) & (lam <= 700)
+    mean, sc, it, shp, amp_cv = scaled_mean([list(x) for x in X])
+    mean = np.array(mean); sc = np.array(sc)
+    Xs = (X.T * sc).T
+    sS = Xs.std(0)
+    sC = mean * (amp_cv / 100.0)
+    shp_core = float(np.mean(sS[core] / np.abs(mean[core])) * 100)
+
+    fig, ax = plt.subplots(figsize=(10.5, 6.8))
+    ax.fill_between(lam, mean - sC, mean + sC, color="#bbb", alpha=0.55,
+                    label="amplitude $\\pm$%.0f %% — how MUCH (real variability)"
+                          % amp_cv)
+    ax.fill_between(lam, mean - sS, mean + sS, color="#2e7d32", alpha=0.40,
+                    label="shape $\\pm$%.1f %% (450-700 nm) — what the water IS"
+                          % shp_core)
+    ax.plot(lam, mean, lw=3.2, color="#14532d", label="mean $R_{rs}$  (n=%d scans)"
+            % len(X))
+    ax.axhline(0, color="#888", lw=0.8)
+    for lam0, txt in ((570, "green peak\nsediment"), (700, "700 nm peak\nhigh SPM"),
+                      (810, "$a_w$ window")):
+        k = int(np.argmin(abs(lam - lam0)))
+        ax.annotate(txt, (lam[k], mean[k]), xytext=(0, 34),
+                    textcoords="offset points", ha="center", fontsize=8.5,
+                    arrowprops=dict(arrowstyle="->", lw=1))
+    ax.set_xlim(RLO, RHI); ax.set_xlabel("wavelength (nm)")
+    ax.set_ylabel("$R_{rs}$  (sr$^{-1}$)")
+    ax.legend(fontsize=10, loc="upper right")
+    ax.grid(alpha=0.25)
+    ax.set_title("%s\nFINAL $R_{rs}$ — amplitude-normalised mean of %d scans, "
+                 "converged in %d iterations" % (tag, len(X), it), fontsize=12,
+                 weight="bold", loc="left")
+    ax.text(0.015, 0.03,
+            "$R_{rs}(\\lambda) = S(\\lambda)\\times c$   with $S$ known to "
+            "%.1f %% and $c$ varying %.0f %% across the station.\n"
+            "Band ratios inherit the %.1f %%; absolute magnitudes inherit the %.0f %%."
+            % (shp_core, amp_cv, shp_core, amp_cv),
+            transform=ax.transAxes, fontsize=9.5, va="bottom",
+            bbox=dict(boxstyle="round,pad=0.4", fc="#f7f7f7", ec="#999"))
+    fig.tight_layout()
+    pth = os.path.join(outdir, "fig12_FINAL_mean_Rrs.png")
+    fig.savefig(pth, dpi=150); plt.close(fig)
+    return pth
+
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("folder")
@@ -1096,6 +1243,8 @@ def main():
                                           a.panel_reflectance)
     p9, vv = fig_variability(water, sky, wl, outdir, tag, a.panel_reflectance, panels)
     p10, fcsv, fp = fig_final(water, sky, wl, outdir, tag, a.panel_reflectance)
+    p11 = fig_scaled_method(water, sky, wl, outdir, tag, a.panel_reflectance)
+    p12 = fig_final_mean(water, sky, wl, outdir, tag, a.panel_reflectance)
     P("")
     P("WHAT IS THE REMAINING SPREAD?  measurement error, or real water?")
     P("  SVD mode 1 carries          %5.1f %%   coherent; noise would spread out" % vv["pc1"])
@@ -1154,6 +1303,9 @@ def main():
       % (fp["shape_core"], fp["amp_cv"]))
     P("  station). One combined error bar would imply the water TYPE is uncertain when")
     P("  only its CONCENTRATION is.")
+    P("")
+    P("  Method figure: fig11.  Deliverable on its own: fig12.")
+    P("  Full derivation, equivalences and failure modes: THEORY_SCALED_MEAN.md")
     P("")
     P("PER-SCAN rho FROM THE MEASURED ANGLE (rather than a fixed 0.028)")
     P("  rho spans %.5f-%.5f across the achieved angles, a %.0f %% range."
@@ -1216,7 +1368,7 @@ def main():
         fh.write(txt + "\n")
     print("\nwrote %s/REPORT.txt" % outdir)
     print("wrote %s" % fcsv)
-    for p in (p1, p2, p3, p4, p5, p6, p7, p8, p9, p10):
+    for p in (p1, p2, p3, p4, p5, p6, p7, p8, p9, p10, p11, p12):
         if p:
             print("wrote %s" % p)
 

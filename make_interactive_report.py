@@ -21,13 +21,13 @@ import numpy as np
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 
-from analyse_location import (RHO_MOBLEY1999, assert_same_dataset, hhmm,
-                              match_by_angle, rrs_three_scan, stats)
-from fieldrrs.rrs import rho_at_angle, view_zenith_from_tilt
+from analyse_location import (RHO_MOBLEY1999, RLO, RHI, assert_same_dataset,
+                              hhmm, match_by_angle, rrs_three_scan, stats)
+from fieldrrs.rrs import rho_at_angle, scaled_mean, view_zenith_from_tilt
 from organize_by_location import fov_deg, survey
 from process_field_day import band, land_reflectance
 
-WLO, WHI, RLO, RHI = 350.0, 950.0, 400.0, 900.0
+WLO, WHI = 350.0, 950.0
 C = {"sky": "#7fb3d5", "water": "#1f7a99", "panel": "#d9534f", "land": "#2e7d32",
      "mean": "#c0392b"}
 PANEL_R = 0.99
@@ -234,6 +234,92 @@ def f_land(land, wl):
     return fig
 
 
+def _matched(water, sky, wl):
+    R, names = [], []
+    for w, sk, _, _ in match_by_angle(water, sky):
+        r = rho_at_angle(view_zenith_from_tilt(w["spec"].tilt_y_deg))
+        R.append(rrs_three_scan(wl, w["spec"].columns["rad_target"],
+                                sk["spec"].columns["rad_target"],
+                                w["spec"].columns["rad_ref"], PANEL_R, r, "none").rrs)
+        names.append(w["n"])
+    return R, names
+
+
+def f_scaled(water, sky, wl):
+    """The amplitude-normalised mean: before, after, and the fitted amplitudes."""
+    R, names = _matched(water, sky, wl)
+    wl_a = np.array(wl); m = (wl_a >= RLO) & (wl_a <= RHI)
+    X = np.array(R)[:, m]; lam = wl_a[m]
+    mean, sc, it, shp, amp_cv = scaled_mean([list(x) for x in X])
+    mean = np.array(mean); sc = np.array(sc)
+    Xs = (X.T * sc).T
+    core = (lam >= 450) & (lam <= 700)
+    shp_core = float(np.mean(Xs.std(0)[core] / abs(mean[core])) * 100)
+    plain_core = float(np.mean(X.std(0)[core] / abs(X.mean(0)[core])) * 100)
+
+    fig = make_subplots(rows=1, cols=3, horizontal_spacing=0.06,
+                        subplot_titles=("as measured  (%.1f %%)" % plain_core,
+                                        "after scaling  (%.1f %%)" % shp_core,
+                                        "fitted amplitude per scan"))
+    for k, (x, xs, n) in enumerate(zip(X, Xs, names)):
+        amp = 1.0 / sc[k]
+        fig.add_trace(go.Scatter(x=lam, y=x, name=n, legendgroup=n,
+                                 line=dict(width=1.1, color=C["water"]), opacity=0.6,
+                                 hovertemplate="%s  c=%.2f<br>%%{x:.1f} nm  %%{y:.5f}"
+                                               "<extra></extra>" % (n, amp)),
+                      row=1, col=1)
+        fig.add_trace(go.Scatter(x=lam, y=xs, name=n, legendgroup=n, showlegend=False,
+                                 line=dict(width=1.1, color="#2e7d32"), opacity=0.6,
+                                 hovertemplate="%s rescaled<br>%%{x:.1f} nm  %%{y:.5f}"
+                                               "<extra></extra>" % n), row=1, col=2)
+    fig.add_trace(go.Scatter(x=lam, y=mean, name="shape S(λ)",
+                             line=dict(width=3.5, color="black")), row=1, col=2)
+    fig.add_trace(go.Bar(x=names, y=[1.0 / v for v in sc], name="amplitude c",
+                         marker_color=C["water"]), row=1, col=3)
+    fig.add_hline(y=1.0, line=dict(color="black", width=1.5), row=1, col=3)
+    fig.update_xaxes(title_text="nm", range=[RLO, RHI], row=1, col=1)
+    fig.update_xaxes(title_text="nm", range=[RLO, RHI], row=1, col=2)
+    fig.update_yaxes(title_text="R_rs  sr⁻¹", row=1, col=1)
+    fig.update_yaxes(title_text="amplitude", row=1, col=3)
+    fig.update_layout(height=470, template="plotly_white", showlegend=False,
+                      title="7 · Amplitude-normalised mean — converged in %d iterations;"
+                            " shape %.1f %%, amplitude %.0f %%" % (it, shp_core, amp_cv))
+    return fig
+
+
+def f_final_mean(water, sky, wl):
+    """The deliverable: mean R_rs with shape and amplitude bands separated."""
+    R, _ = _matched(water, sky, wl)
+    wl_a = np.array(wl); m = (wl_a >= RLO) & (wl_a <= RHI)
+    X = np.array(R)[:, m]; lam = wl_a[m]
+    mean, sc, it, shp, amp_cv = scaled_mean([list(x) for x in X])
+    mean = np.array(mean); Xs = (X.T * np.array(sc)).T
+    sS = Xs.std(0); sC = mean * amp_cv / 100.0
+    core = (lam >= 450) & (lam <= 700)
+    shp_core = float(np.mean(sS[core] / abs(mean[core])) * 100)
+    fig = go.Figure()
+    fig.add_trace(go.Scatter(x=np.r_[lam, lam[::-1]],
+                             y=np.r_[mean + sC, (mean - sC)[::-1]], fill="toself",
+                             fillcolor="rgba(150,150,150,0.45)", line=dict(width=0),
+                             name="amplitude ±%.0f %% (real variability)" % amp_cv,
+                             hoverinfo="skip"))
+    fig.add_trace(go.Scatter(x=np.r_[lam, lam[::-1]],
+                             y=np.r_[mean + sS, (mean - sS)[::-1]], fill="toself",
+                             fillcolor="rgba(46,125,50,0.40)", line=dict(width=0),
+                             name="shape ±%.1f %% (what the water is)" % shp_core,
+                             hoverinfo="skip"))
+    fig.add_trace(go.Scatter(x=lam, y=mean, line=dict(width=3.5, color="#14532d"),
+                             name="mean R_rs (n=%d)" % len(X),
+                             hovertemplate="%{x:.1f} nm<br>R_rs=%{y:.5f} sr⁻¹"
+                                           "<extra></extra>"))
+    fig.update_layout(height=560, template="plotly_white", xaxis_title="nm",
+                      yaxis_title="R_rs  (sr⁻¹)",
+                      title="8 · FINAL R_rs — R_rs(λ) = S(λ) × c, S known to %.1f %%, "
+                            "c varying %.0f %%" % (shp_core, amp_cv))
+    return fig
+
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("folder")
@@ -261,6 +347,8 @@ def main():
     figs.append(f_geometry(water, sky, wl))
     if land:
         figs.append(f_land(land, wl))
+    figs.append(f_scaled(water, sky, wl))
+    figs.append(f_final_mean(water, sky, wl))
 
     report = os.path.join(outdir, "REPORT.txt")
     notes = open(report).read() if os.path.exists(report) else ""
