@@ -102,8 +102,8 @@ def v2_instrument(scans):
     check("  so rad_target and rad_ref are not swapped", med < 5e-3,
           "a swap would give the reciprocal, ~10^2 off")
     print("      Scatter is SNR-driven: it tracks 1/L_t, worst at 720-750 nm where the\n"
-          "      water radiance is lowest. Unbiased, so it contributes ~%.2f %% to a\n"
-          "      33-scan station mean." % (100 * sd / 33 ** 0.5))
+          "      water radiance is lowest. Unbiased, so it contributes ~%.2f %% to this\n"
+          "      %d-scan station's mean." % (100 * sd / max(len(sds), 1) ** 0.5, len(sds)))
 
 
 def v3_physics(results):
@@ -196,13 +196,19 @@ def v6_conservation(results):
             i = max((k for k in range(len(wl)) if 400 <= wl[k] <= 750),
                     key=lambda k: v[k])
             peak_ok &= wl[i] > 520
+    ntot = sum(len(st["rrs"]) for st in results)
+    # "Nearly all" is a PROPORTION, not the fixed count of 3 this carried when the
+    # dataset that first exercised it happened to have ~33 water scans -- a fixed count
+    # is far too lenient at a small station (3 of 5 flagged would still "pass") and
+    # arbitrarily strict at a large one.
+    max_flagged = max(1, round(0.10 * ntot))
     check("no negative R_rs in 400-700 nm", nneg == 0, "%d negative samples" % nneg)
     check("R_rs below the 1/pi isotropic ceiling", maxrrs < 1 / math.pi,
           "max R_rs = %.4f sr^-1 (limit 0.318)" % maxrrs)
     check("R_rs collapses in the NIR for nearly all scans",
-          len(hi_nir) <= 3,
-          "%d of 33 scans exceed NIR/green = 0.25 (worst %.3f)"
-          % (len(hi_nir), worst_nir))
+          len(hi_nir) <= max_flagged,
+          "%d of %d scans exceed NIR/green = 0.25 (worst %.3f), threshold <= %d"
+          % (len(hi_nir), ntot, worst_nir, max_flagged))
     if hi_nir:
         print("      FLAGGED, inspect before using: %s"
               % ", ".join("%s (%.2f)" % x for x in hi_nir))

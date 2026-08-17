@@ -1,0 +1,31 @@
+==============================================================================
+PER-SCAN WATER QC  ·  LOC3_66.89235N_162.59149W  ·  FIBR15_FOV15
+==============================================================================
+5 water, 3 sky. Nothing is averaged until the scans are shown to be one
+population, because a 'spread' over different targets is not an uncertainty.
+
+IS IT ONE POPULATION?
+  main group: 3 scans, internal shape spread 5.82 deg
+  deviant   : 00058, 00059
+
+THE COLLAPSE TEST -- glint is additive, so a NIR correction must remove it
+  method              main spread 00058   00059
+  none                      5.82    19.45    11.68
+  nir_zero                  5.70    47.47    15.81
+  nir_similarity            3.35    14.16     6.57
+
+VERDICT PER SCAN
+  scan    sky    theta     Rrs555  700/675  412/555   NIRrat      ang  verdict
+  00055   00054    46.2   0.01022     1.18    0.219     3.59     0.20  clean
+  00056   00054    48.3   0.01004     1.18    0.222     3.55     0.20  clean
+  00057   00054    39.7   0.00889     1.07    0.253     2.34     5.71  clean
+  00058   00054    44.8   0.00952     1.06    0.342     1.52    19.45  deviant, NOT glint
+  00059   00054    45.7   0.00953     1.04    0.338     1.81    11.68  deviant, NOT glint
+
+WHAT IS THE NON-GLINT DIFFERENCE MADE OF?  (00058, 00059 vs the main group)
+  chlorophyll (Gaussian at 675 nm)         angle  99.00 deg   removes   1.2 %
+  flat offset (what NIR methods remove)    angle 120.76 deg   removes  14.1 %
+  sky reflection (rho error)               angle 132.56 deg   removes  26.3 %
+  A partial removal means the difference is not one clean thing.
+
+Ruddick et al. (2006) NIR similarity ratio for pure-water residual: 1.912

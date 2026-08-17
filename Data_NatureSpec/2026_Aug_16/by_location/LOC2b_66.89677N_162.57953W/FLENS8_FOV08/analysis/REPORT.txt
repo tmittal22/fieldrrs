@@ -107,18 +107,9 @@ PER-SCAN rho FROM THE MEASURED ANGLE (rather than a fixed 0.028)
   fieldrrs.rrs.view_zenith_from_tilt).
 
 DOES GEOMETRY MATTER? (Rrs(443), n=3 water / 9 sky)
-  WATER view angle matter            r=+0.99 p=0.093   over the observed span: +5.4 %
-  SKY view angle matter              r=-0.99 p=0.000   over the observed span: -4.9 %
-  FOOTPRINT matter                   r=+nan p=nan   over the observed span: +0.0 %
-  -> SIGNIFICANT: Does the SKY view angle matter?
+  3 water scans -- too few for a trend/correlation study (fig6 skipped).
 
-  CONFOUND CONTROL (a tilt trend could just be time or range in disguise)
-    tilt correlated with time?    r=-0.77 p=0.442
-    range correlated with time?   r=+nan p=nan
-    tilt vs Rrs | control TIME    r=+1.00 p=nan
-    tilt vs Rrs | control RANGE   r=+0.99 p=nan
-    range vs Rrs | control TILT   r=+0.23 p=nan
-    range took only 1 distinct values, so 'footprint' is a 1-level factor here, not a continuum.
+  CONFOUND CONTROL: skipped, too few water scans
 
 PER-SCAN SKY PAIRING  (fig13, sky_choice_per_scan.csv)
   For each water scan: which sky the angle matcher picked, how much the CHOICE

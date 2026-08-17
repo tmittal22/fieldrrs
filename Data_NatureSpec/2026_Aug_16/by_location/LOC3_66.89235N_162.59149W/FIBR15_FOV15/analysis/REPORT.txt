@@ -1,0 +1,139 @@
+==============================================================================
+LOC3_66.89235N_162.59149W  ·  FIBR15_FOV15
+==============================================================================
+8 scans   22:07-22:11 UTC   sun 36.09-36.17 deg   FOV 15 deg
+3 sky, 5 water, 0 LAND targets
+all scans within 1 m and one foreoptic: pairing cannot leave this location
+glint correction applied to the final product: none  (default -- no correction)
+1 distinct panel references, so the panel was re-taken 0 time(s) mid-station
+range 0.877-0.877 m -> footprint 0.23-0.23 m across (2 R tan(FOV/2))   [1 scan(s) carry NO range in the header]
+
+PANEL  n= 1   mean L(450-650) = 2.7877e-01   full spread 0.0 %
+SKY    n= 3   mean L(450-650) = 2.7060e-02   full spread 6.3 %
+WATER  n= 5   mean L(450-650) = 8.0766e-03   full spread 13.5 %
+
+IS E_d REASONABLE?
+  median T over 450-650 nm      0.824      (clear sky 0.6-0.9)
+  max T anywhere 380-950 nm     1.010      IMPOSSIBLE, exceeds 1
+  O2-A absorption depth         63.8 %     (a real atmosphere shows this)
+  H2O 940 nm absorption depth   85.7 %
+  T(red)/T(blue)                1.15       (>1 expected: Rayleigh weakens to the red)
+  panel-to-panel disagreement   0.0 %     over 450-650 nm
+  VERDICT: SUSPECT, inspect fig3
+
+EXCLUDED FROM THE FINAL PRODUCT (--exclude-water)
+  00058, 00059 -- see analysis/water_scans/REPORT.txt for why (run analyse_water_scans.py first).
+  3 of 5 water scans remain for FINAL_Rrs.csv.
+  Figures 1/4/5/6/9/13 below still show ALL 5 scans (the exclusion is not silent); figures 10/11/12 and FINAL_Rrs.csv use only the 3 clean ones.
+
+R_rs RESULT  (angle-matched pairing, per-scan rho)
+  Rrs(443) = 0.00377 sr^-1     Rrs(555) = 0.00964 sr^-1
+  sky paired to each water by mirrored view angle, WITHIN this location and
+  within the same panel-reference block: mismatch mean 3.2 deg, worst 8.4 deg
+
+  SPREAD AT 443 nm.  Quote the sd: a min-max envelope grows with sample size,
+  so A (15 spectra) and C (5) are NOT comparable on it.
+    treatment                          envelope       sd
+    A  blind pairing, fixed rho           33.0 %    13.2 %
+    B  blind pairing, rho(theta_v)        37.0 %        -
+    C  ANGLE-MATCHED, rho(theta_v)        32.1 %    14.0 %
+
+  CONTROL: 2000 draws assigning a RANDOM sky per water at the same n=5, drawn
+  from the SAME panel block, differing from the treatment only in ignoring angle:
+  sd = 14.4 % (median). Angle matching gives 14.0 %, and 31 % of random draws
+  are at least as tight, so it is NOT a demonstrated improvement at this n.
+  Reason: these sky scans span only ~5 deg, so there is little geometry to match.
+  -> the honest spread on R_rs(443) is the sd, about 14 %, and the fall from
+     the 33 % blind envelope is mostly sample size, not physics.
+  spread from WHICH WATER scan:  32.9 % at 443 nm (max 218.9 % over 400-900)
+  spread from WHICH SKY scan:    3.9 % at 443 nm (max 9.2 % over 400-900)
+  -> WATER-to-water variability dominates at 443 nm.
+
+For scale, rho alone (0.022-0.045) moves Rrs(443) by ~32 %%, so it remains the
+largest single term. See THEORY.pdf p3.
+
+BEST-MATCHED PAIR (smallest NIR-similarity residual)
+  best   water 00059 + sky 00053   delta = +3.503e-04 sr^-1
+  worst  water 00058 + sky 00052   delta = +2.145e-03 sr^-1
+  across all pairings Rrs(443) = 0.00396 +/- 0.00052 (1 sd)
+
+WHAT IS THE REMAINING SPREAD?  measurement error, or real water?
+  SVD mode 1 carries           82.5 %   coherent; noise would spread out
+  spread raw / normalised     9.9 % / 9.9 %
+  -> 0 % of the variance is pure AMPLITUDE, only 9.9 % is SHAPE
+  R_rs(555) range             factor 1.15 across the station
+  spectral distance vs time   r=+0.37 p=0.29  -> NO time trend
+  instrument floor (panel)    n/a -- only 1 panel reference recorded at this station, so there is no panel-replicate spread to measure
+  sky 2.6 %   water 9.9 %
+
+  READING: the spread is REAL WATER, not measurement error. The composition is
+  near-constant (shape stable to 9.9 %) while the AMOUNT of scattering material
+  changes by a factor 1.15 between scans, with no time trend, over a footprint of
+  ~0.16 m. That is spatial patchiness in suspended load, which is what a turbid
+  nearshore surface does.
+
+  CONSEQUENCE FOR INVERSION: band RATIOS are far more stable than absolute R_rs
+  here (9.9 % vs 9.9 %), so ratio-based products should be quoted with more
+  confidence than absolute magnitudes at this site.
+
+==============================================================================
+FINAL PRODUCT  (fig10, FINAL_Rrs.csv)
+==============================================================================
+  Iterative amplitude-normalised mean, converged in 5 iterations.
+  Each scan is scaled onto the running mean, then the mean is re-formed, which
+  separates the two things that are genuinely different:
+
+    SHAPE        2.6 % over 450-700 nm   <- what the water IS. The product.
+    AMPLITUDE    3.4 %                    <- how MUCH there is. Real, not error.
+    (a plain average blends them into one 4.0 % band)
+
+  Over the full 400-900 nm the shape figure is 10.1 %, but a RELATIVE scatter is
+  meaningless where R_rs approaches zero, which it does below 430 and above 800.
+  The mean SHAPE is 2x better determined than a plain average suggests.
+  Per-scan amplitude relative to the mean:
+    00055 1.03  00056 1.02  00057 0.95  
+
+  Quote it as: R_rs = (shape, +/- 2.6 %) x (amplitude, 3 % 1 sd across the
+  station). One combined error bar would imply the water TYPE is uncertain when
+  only its CONCENTRATION is.
+
+  Method figure: fig11.  Deliverable on its own: fig12.
+  Full derivation, equivalences and failure modes: THEORY_SCALED_MEAN.md
+
+PER-SCAN rho FROM THE MEASURED ANGLE (rather than a fixed 0.028)
+  rho spans 0.02783-0.03570 across the achieved angles, a 28 % range.
+  treatment                         r        p    scatter
+  fixed 0.028                   +0.21    0.733      13.2 %
+  rho(theta_v=tilt)             -0.10    0.874      14.3 %
+  rho(theta_v=90-tilt)          +0.52    0.366      16.9 %
+  -> lowest scatter: fixed 0.028
+  A correct correction flattens the trend AND reduces scatter. One that does
+  neither is refuted, which is how the tilt datum was settled (see
+  fieldrrs.rrs.view_zenith_from_tilt).
+
+DOES GEOMETRY MATTER? (Rrs(443), n=5 water / 3 sky)
+  WATER view angle matter            r=+0.17 p=0.834   over the observed span: +5.6 %
+  SKY view angle matter              r=-0.99 p=0.085   over the observed span: -3.1 %
+  FOOTPRINT matter                   r=+nan p=nan   over the observed span: +0.0 %
+  -> no term reaches p<0.05, so none is separable from scan-to-scan noise at this n
+
+  CONFOUND CONTROL (a tilt trend could just be time or range in disguise)
+    tilt correlated with time?    r=-0.52 p=0.482
+    range correlated with time?   r=+nan p=nan
+    tilt vs Rrs | control TIME    r=+0.92 p=0.264
+    tilt vs Rrs | control RANGE   r=+0.17 p=0.894
+    range vs Rrs | control TILT   r=+0.31 p=0.800
+    range took only 1 distinct values, so 'footprint' is a 1-level factor here, not a continuum.
+
+PER-SCAN SKY PAIRING  (fig13, sky_choice_per_scan.csv)
+  For each water scan: which sky the angle matcher picked, how much the CHOICE
+  of sky moves R_rs, and how that compares with scales we already know.
+  water   sky      dtheta   sd443 %   sd555 %  vs mean %
+  00055   00054       1.9      1.87      0.23       2.30
+  00056   00054       0.2      2.04      0.25       2.51
+  00057   00054       8.4      1.46      0.22       1.80
+  00058   00054       3.3      1.30      0.23       1.61
+  00059   00054       2.4      1.37      0.24       1.69
+  band-mean spread from the sky choice: median 0.44 %, worst 0.60 %
+  against n/a (1 panel ref) instrument floor, 2.6 % shape uncertainty, 9.9 % water spread (this station's own, from fig9/fig11)
+  -> the sky choice does NOT matter at this scale

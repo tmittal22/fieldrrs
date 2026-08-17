@@ -1,0 +1,4 @@
+"# per water scan: the angle-matched sky, the spread the sky choice causes, and the difference from averaging all skies"
+water,best_sky,dtheta_deg,sd443_pct,sd555_pct,sdband_pct,diff443_pct,diff555_pct,diffband_pct
+00058,00054,3.30,1.3028,0.2319,0.3679,1.6055,0.2832,0.4510
+00059,00054,2.40,1.3739,0.2384,0.3930,1.6932,0.2912,0.4805

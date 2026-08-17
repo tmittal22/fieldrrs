@@ -537,9 +537,33 @@ def fig_geometry(scans, water, sky, wl, outdir, tag, panel_r, rho):
 
 # ---------------------------------------------------------------- figure 6
 def fig_sensitivity(water, sky, wl, outdir, tag, panel_r, rho, fov, glint="none"):
-    """Does the pointing angle or the footprint systematically move R_rs?"""
+    """Does the pointing angle or the footprint systematically move R_rs?
+
+    Correlation and a linear trend need at least 2 points to be computed at all and are
+    not informative below about 4-5; a station with fewer water scans than that (e.g. a
+    2-scan sub-population deliberately isolated for its own sake, not for a trend study)
+    gets a placeholder instead of a crash or a fake-precision r/p on 2 points.
+    """
     import numpy as np
     from scipy import stats as sps
+
+    if len(water) < 4:
+        fig, ax = plt.subplots(figsize=(8, 4))
+        ax.axis("off")
+        ax.text(0.5, 0.5,
+                "Only %d water scan%s here -- too few for a trend/correlation study.\n"
+                "This figure needs several scans spanning a range of angle/footprint;\n"
+                "see the station's REPORT.txt for what this sub-population is FOR."
+                % (len(water), "" if len(water) == 1 else "s"),
+                ha="center", va="center", fontsize=11, transform=ax.transAxes)
+        fig.suptitle("%s -- angle/footprint sensitivity: not applicable" % tag,
+                     fontsize=12)
+        p = os.path.join(outdir, "fig6_angle_footprint.png")
+        fig.savefig(p, dpi=120); plt.close(fig)
+        nn = (float("nan"), float("nan"))
+        return p, [], {"tilt_vs_time": nn, "range_vs_time": nn, "tilt_ctrl_time": nn,
+                       "tilt_ctrl_range": nn, "range_ctrl_tilt": nn, "n_ranges": 0,
+                       "insufficient_data": True}
 
     l_sky_mean = [sum(s["spec"].columns["rad_target"][i] for s in sky) / len(sky)
                   for i in range(len(wl))]
@@ -777,6 +801,28 @@ def fig_variability(water, sky, wl, outdir, tag, panel_r, panels, glint="none"):
     """
     import numpy as np
     from scipy import stats as sps
+
+    if len(water) < 3:
+        # The time-gap-vs-distance test needs >=2 pairwise distances (n>=3 scans), and
+        # an SVD "one mode dominates" reading needs enough scans to mean anything. A
+        # 2-scan sub-population isolated deliberately (not for a variability study)
+        # gets a placeholder, not a crash or a fabricated single-pair "correlation".
+        fig, ax = plt.subplots(figsize=(8, 4))
+        ax.axis("off")
+        ax.text(0.5, 0.5,
+                "Only %d water scan%s here -- too few for the variability-origin "
+                "tests\n(need >=3 for a pairwise time-gap correlation). See REPORT.txt."
+                % (len(water), "" if len(water) == 1 else "s"),
+                ha="center", va="center", fontsize=11, transform=ax.transAxes)
+        fig.suptitle("%s -- variability origin: not applicable" % tag, fontsize=12)
+        pth = os.path.join(outdir, "fig9_variability_origin.png")
+        fig.savefig(pth, dpi=120); plt.close(fig)
+        return pth, {"pc1": float("nan"), "raw": float("nan"), "nor": float("nan"),
+                     "amp_frac": float("nan"), "ratio": float("nan"),
+                     "r_t": float("nan"), "p_t": float("nan"), "floor": float("nan"),
+                     "floor_measurable": False, "sky_floor": float("nan"),
+                     "insufficient_data": True}
+
     pairs = match_by_angle(water, sky)
     order = sorted(range(len(pairs)), key=lambda k: pairs[k][0]["gps"])
     R, t, names = [], [], []
@@ -1682,23 +1728,30 @@ def main():
     P("  fieldrrs.rrs.view_zenith_from_tilt).")
     P("")
     P("DOES GEOMETRY MATTER? (Rrs(443), n=%d water / %d sky)" % (len(water), len(sky)))
-    for d in spec:
-        P("  %-34s r=%+.2f p=%.3f   over the observed span: %+.1f %%"
-          % (d["what"].replace("Does the ", "").replace("?", ""), d["r"], d["p"],
-             d["rel"] if d["effect"] >= 0 else -d["rel"]))
-    sig = [d for d in spec if d["p"] < 0.05]
-    P("  -> %s" % ("no term reaches p<0.05, so none is separable from scan-to-scan "
-                   "noise at this n" if not sig
-                   else "SIGNIFICANT: " + "; ".join(d["what"] for d in sig)))
+    if conf.get("insufficient_data"):
+        P("  %d water scans -- too few for a trend/correlation study (fig6 skipped)."
+          % len(water))
+    else:
+        for d in spec:
+            P("  %-34s r=%+.2f p=%.3f   over the observed span: %+.1f %%"
+              % (d["what"].replace("Does the ", "").replace("?", ""), d["r"], d["p"],
+                 d["rel"] if d["effect"] >= 0 else -d["rel"]))
+        sig = [d for d in spec if d["p"] < 0.05]
+        P("  -> %s" % ("no term reaches p<0.05, so none is separable from scan-to-scan "
+                       "noise at this n" if not sig
+                       else "SIGNIFICANT: " + "; ".join(d["what"] for d in sig)))
     P("")
-    P("  CONFOUND CONTROL (a tilt trend could just be time or range in disguise)")
-    P("    tilt correlated with time?    r=%+.2f p=%.3f" % conf["tilt_vs_time"])
-    P("    range correlated with time?   r=%+.2f p=%.3f" % conf["range_vs_time"])
-    P("    tilt vs Rrs | control TIME    r=%+.2f p=%.3f" % conf["tilt_ctrl_time"])
-    P("    tilt vs Rrs | control RANGE   r=%+.2f p=%.3f" % conf["tilt_ctrl_range"])
-    P("    range vs Rrs | control TILT   r=%+.2f p=%.3f" % conf["range_ctrl_tilt"])
-    P("    range took only %d distinct values, so 'footprint' is a %d-level factor "
-      "here, not a continuum." % (conf["n_ranges"], conf["n_ranges"]))
+    if conf.get("insufficient_data"):
+        P("  CONFOUND CONTROL: skipped, too few water scans")
+    else:
+        P("  CONFOUND CONTROL (a tilt trend could just be time or range in disguise)")
+        P("    tilt correlated with time?    r=%+.2f p=%.3f" % conf["tilt_vs_time"])
+        P("    range correlated with time?   r=%+.2f p=%.3f" % conf["range_vs_time"])
+        P("    tilt vs Rrs | control TIME    r=%+.2f p=%.3f" % conf["tilt_ctrl_time"])
+        P("    tilt vs Rrs | control RANGE   r=%+.2f p=%.3f" % conf["tilt_ctrl_range"])
+        P("    range vs Rrs | control TILT   r=%+.2f p=%.3f" % conf["range_ctrl_tilt"])
+        P("    range took only %d distinct values, so 'footprint' is a %d-level factor "
+          "here, not a continuum." % (conf["n_ranges"], conf["n_ranges"]))
 
     if land:
         from process_field_day import land_reflectance
