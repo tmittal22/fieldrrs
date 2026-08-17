@@ -7,6 +7,17 @@ are physical ones that a synthetic fixture could not have told us to expect.
 
 They skip cleanly if the data folder is absent, so the suite still runs in a checkout
 without it.
+
+WHERE THE 60 SCANS LIVE. The original flat `Data_NatureSpec/2026_Aug_16/*.sed` archive
+was deleted (2026-08-17 repo cleanup) once `by_location/` was built, verified, and had
+become the sole thing every script actually reads -- keeping both was a genuine, sizeable
+duplicate. `_scans()` therefore reads the 4 by_location folders that are real files, not
+symlinks (`organize_by_location.py` copied each raw scan there exactly once): LOC1 and
+LOC3's two foreoptics hold their own scans directly; LOC2's pre-split folder is the one
+real backing store for the LOC2a/2b/2c split (their raw files are symlinks into it, see
+FIELD_DAY_WORKFLOW.md) and LOC3's murky pair is symlinked into FIBR15_FOV15 the same way
+-- so reading only the 4 real folders below reconstitutes exactly the original 60 with no
+double-counting from a split's symlinks.
 """
 
 import math
@@ -19,6 +30,13 @@ ROOT = os.path.dirname(HERE)
 sys.path.insert(0, ROOT)
 
 DATA = os.path.join(ROOT, "Data_NatureSpec", "2026_Aug_16")
+BY_LOCATION = os.path.join(DATA, "by_location")
+REAL_BACKING_STORES = [
+    os.path.join(BY_LOCATION, "LOC1_66.89718N_162.60290W", "FLENS8_FOV08"),
+    os.path.join(BY_LOCATION, "LOC2_66.89677N_162.57953W", "FLENS8_FOV08"),
+    os.path.join(BY_LOCATION, "LOC3_66.89235N_162.59149W", "FIBR15_FOV15"),
+    os.path.join(BY_LOCATION, "LOC3_66.89235N_162.59149W", "FLENS8_FOV08"),
+]
 
 if not os.path.isdir(DATA):
     raise unittest.SkipTest("no field data at %s" % DATA)
@@ -32,8 +50,17 @@ from survey_field_data import read_header_log                # noqa: E402
 
 
 def _scans():
+    """All 60 real scans, reconstituted from the 4 real backing-store folders and
+    re-sorted into the original scan-number order (`load()` sorts within one folder
+    only; scan numbers are assigned sequentially across the whole day regardless of
+    which station they end up filed under, so a global re-sort exactly reproduces the
+    order the old flat-folder `load(DATA)` used to give)."""
     if not hasattr(_scans, "cache"):
-        _scans.cache = load(DATA)
+        merged = []
+        for folder in REAL_BACKING_STORES:
+            merged.extend(load(folder))
+        merged.sort(key=lambda s: s["n"])
+        _scans.cache = merged
     return _scans.cache
 
 

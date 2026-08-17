@@ -21,7 +21,7 @@ from matplotlib.patches import Rectangle
 import basemap as bm
 from organize_by_location import cluster, fov_deg, survey
 
-COL = {"water": "#00d5ff", "sky": "#ffd166", "vegetation": "#7CFC00"}
+COL = {"water": "#00d5ff", "sky": "#ffd166", "land": "#7CFC00"}
 SITE = ["#ff2d55", "#ffffff", "#ff9f0a"]
 
 
@@ -98,7 +98,7 @@ def main():
                  % (len(scans), len(locs)), fontsize=13, weight="bold")
     ax.legend(handles=[Line2D([], [], marker="o", ls="", color=COL[k],
                               markeredgecolor="k", label=k)
-                       for k in ("water", "sky", "vegetation")],
+                       for k in ("water", "sky", "land")],
               fontsize=9.5, loc="lower left", framealpha=0.92)
     # matplotlib renders these longitudes with a '+6.689e1' offset by default, which is
     # unreadable on a map; force plain ticks.
