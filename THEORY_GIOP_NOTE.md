@@ -57,6 +57,77 @@ the measured r_rs. Three free amplitudes; here, 301 wavelengths.
 > a_φ(443) = M_φ × 0.05394 ≠ M_φ. M_φ carries units of chlorophyll; the other two carry
 > units of m⁻¹.
 
+### 2.1 The seed chain — how η, S_dg and a*_φ are actually computed
+
+Three inputs are neither fitted nor measured: they are **computed from the spectrum
+itself by published parameterisations, before the inversion runs**. Figure
+`giop2_seed_chain.png` shows all three, evaluated on this spectrum. Everything below
+depends on one number, the subsurface blue/green ratio
+
+> x = r_rs(443) / r_rs(555),  **= 0.30077 on the LOC1 mean**
+
+**η — QAA v5** (`model.eta_qaa`, the `eta='qaa'` default; note it uses *subsurface*
+r_rs):
+
+> **η = 2.0 · [ 1 − 1.2 · exp(−0.9 x) ]**   → **η = 0.1692** here
+
+The alternative is `eta='gsm'`, a constant 1.03373 — six times larger. Across the 12
+per-scan LOC1 fits the QAA formula returns η = 0.127–0.215, so it is stable within the
+station but sits far below the GSM constant, which is what a low blue/green ratio does.
+
+**S_dg — four options, and they disagree by 71 %:**
+
+| option | formula | on LOC1 |
+|---|---|---|
+| **0.018** | GIOP-DC default, a fixed constant | 0.0180 |
+| `'qaa'` | 0.015 + 0.002 / (0.6 + x) | 0.01722 |
+| `'obpg'` | clip[ 0.015 + 0.0038·log₁₀(R_rs(412)/R_rs(555)), 0.01, 0.02 ] | **0.01205** |
+| `'gsm'` | constant | 0.02061 |
+| — | **fitted here** (§4) | **0.0113** |
+
+> ⚠ `'qaa'` uses *subsurface* r_rs while `'obpg'` uses *above-surface* R_rs. That
+> asymmetry is real, is preserved from the upstream MATLAB deliberately, and is recorded
+> in `giop_python/PORTING_NOTES.md` D3.
+>
+> **This is corroboration, not just disagreement.** GIOP's own `'obpg'` parameterisation
+> gives 0.01205, within **7 %** of the value χ² independently prefers (0.0113), while the
+> GIOP-DC default 0.018 is **59 % high**. Two routes that share no machinery — a published
+> band-ratio formula and our χ² minimisation — agree that this water has a shallower CDOM
+> slope than the default assumes.
+
+**a*_φ — Bricaud et al. (1998)**, and this is the *only* thing the OC4 number does:
+
+> **a*_φ(λ) = A_φ(λ) · chl^( E_φ(λ) − 1 )**,  rescaled so a*_φ(442) = 0.055 m² mg⁻¹
+
+A_φ and E_φ are tabulated per wavelength; the chlorophyll enters as a **power-law
+exponent**, so the seed changes the *shape*, not the amplitude. It is **frozen at the
+seed and never iterated** — GIOP does not re-derive chl from its own retrieval. The shape
+change is not cosmetic:
+
+| seed chl | a*_φ(443) | a*_φ(443)/a*_φ(675) |
+|---|---|---|
+| 0.5 | 0.05472 | 2.349 |
+| 2 | 0.05435 | 1.781 |
+| **9.84 (OC4 here)** | **0.05394** | **1.296** |
+| 20 | 0.05376 | 1.125 |
+| 50 | 0.05352 | 0.937 |
+
+The blue-to-red contrast of the phytoplankton shape moves by a factor 2.5 across the
+plausible seed range while its 443 nm value barely moves — packaging: higher chlorophyll
+means larger, more pigment-packed cells, flattening the blue peak. **That is why sweeping
+the OC4 input in `giop8_assumption_free.png` changes the answer at all**, and why M_φ
+ranges 0 → 41 under that sweep.
+
+**Where OC4 itself comes from** (`empirical.get_oc`, NASA OC v6, ported from
+`get_oc.m`): a 4th-order polynomial in one band ratio,
+
+> X = log₁₀[ max(R_rs 443, 490, 510) / R_rs(555) ],  log₁₀ chl = Σ aᵢ Xⁱ
+
+On LOC1 the numerator band selected is **510 nm**, X = −0.1878, **chl = 9.84 mg m⁻³**.
+A blue/green ratio in sediment-dominated water reads suspended mineral as chlorophyll,
+which is the Case-1/Case-2 problem in §5 — so the seed that sets the a*_φ shape is itself
+the least trustworthy number in the chain.
+
 ## 3. Why the answer is weaker than it looks
 
 Equation (2) shows R_rs constrains **u(λ) = b_b/(a+b_b)** and nothing else. Splitting u
@@ -107,6 +178,71 @@ Three cautions, all of which bind on real data:
    by ŝ = χ²_ν,min (Avni 1976) is the standard treatment — and on LOC1 it *still*
    collapses to one arm, which is itself the finding: the assumption sweep is a set of
    rejected models, not an uncertainty band.
+
+### 4.1 "Free" is not assumption-free — the OC4 seed survives it
+
+`fit_shapes=True` frees S_dg and η. It does **not** free a*_φ: `_invert_shapes` builds
+the phytoplankton eigenvector **once** from the chlorophyll seed and holds it fixed
+inside the profile. So the OC4 number — a Case-1 band ratio, on Case-2 water — still sets
+the phytoplankton shape in every "free" fit reported here.
+
+The genuinely maximal arm (`_maxfree` in `make_giop_figures.py`) profiles the seed as
+well, over 10 Bricaud seeds **and** 6 Ciotti S_f values, and reports the best. On the
+LOC1 mean spectrum:
+
+| arm | free parameters | M_φ | a_dg(443) | b_bp(443) | S_dg | η | χ²_ν |
+|---|---|---|---|---|---|---|---|
+| constrained (GIOP-DC) | 3 amplitudes | 11.47 | 1.254 | 0.0836 | 0.018 *fixed* | 0.169 *QAA* | **74.5** |
+| free (still OC4-seeded) | + S_dg, η | 2.26 | 0.779 | 0.0430 | 0.01176 | −1.000 | **18.1** |
+| **max freedom** (Bricaud seed 3) | + a*_φ family/seed | 1.68 | 0.781 | 0.0416 | 0.01144 | −1.000 | **17.2** |
+
+Two things follow, and they point in opposite directions:
+
+- **The CDOM slope matters far more than the seed.** Releasing S_dg and η took χ²_ν from
+  74.5 to 18.1; additionally releasing the a*_φ family took it only to 17.2. So the a*_φ
+  prescription — the assumption most obviously wrong on Case-2 water — is **not** what
+  the misfit is made of.
+- **a_dg and b_bp are stable across the two free arms** (0.779 → 0.781, and 0.0430 →
+  0.0416, i.e. 0.2 % and 3 %). Once the shapes are free, those two stop caring about the
+  seed. **M_φ does not**: 2.26 → 1.68, and it was 11.47 constrained.
+
+### 4.2 "If you know chl from OC4, don't you know the shape *and* the amplitude?"
+
+Yes — and GIOP deliberately throws the amplitude away. Bricaud gives the **absolute**
+absorption
+
+> a_φ(λ) = A_φ(λ) · chl^E_φ(λ)
+
+GIOP divides by chl to get the **specific** a*_φ(λ) = A_φ(λ)·chl^(E_φ−1), renormalises it
+to 0.055 at 442 nm, and then fits a free amplitude M_φ on top. Because of that
+normalisation M_φ carries units of chlorophyll, so if the seed were believed you would
+simply set **M_φ = chl** and phytoplankton would cost zero free parameters. GIOP does not,
+because inheriting a Case-1 band ratio is the thing a semi-analytical inversion exists to
+avoid.
+
+That makes **M_φ vs its own seed a real internal-consistency test**, and GIOP never runs
+it — the docstring is explicit that the seed is frozen and not iterated. Sweeping the
+seed and asking where M_φ = seed (panel 7 of `giop10_final_result.png`) gives **two**
+roots:
+
+| root | chl | stability |
+|---|---|---|
+| lower | 1.22 | **unstable** — this is where M_φ has collapsed onto its 0 bound; iterate away and you never return |
+| upper | **11.18** | **stable** — iterating the seed converges here |
+
+> ⚠ Taking the *first* sign change reports the artefact. The first version of this
+> analysis did exactly that and would have published "self-consistent chl = 1.2 against
+> OC4 9.8", a factor-8 contradiction that does not exist.
+
+**The stable fixed point is 11.18 against OC4's 9.84 — agreement to 14 %.** So in the
+constrained configuration GIOP and OC4 *are* mutually consistent, and the earlier
+"factor-2.4 internal contradiction" is dead twice over (once by going hyperspectral,
+once by this).
+
+But that consistency is a property of the **constrained** model, which fits at χ²_ν = 74.
+The arms that actually fit want **M_φ ≈ 1.7–2.3, roughly 5× less phytoplankton than OC4
+reports**. Two Case-1 relations agreeing with each other is not evidence about the water;
+it is evidence that they share a calibration.
 
 ## 5. Where the model stops
 

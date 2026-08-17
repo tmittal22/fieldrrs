@@ -78,3 +78,29 @@ sweep), for the same reason.
 
 Consequence: a_dg(443) and b_bp(443) drop ~40 % and ~49 % from the fixed-shape values.
 See `../../../../../LOC1_GIOP_FINDINGS.md` Correction 2.
+
+---
+
+## 2026-08-17 additions — the seed chain, per-spectrum free fits, and THE final number
+
+`giop2_seed_chain.png` (replaces giop2_oc4_explained) — everything the inversion
+prescribes BEFORE it fits anything, with each formula evaluated on this spectrum:
+OC4 -> the Bricaud a*_phi shape (and nothing else; the seed's AMPLITUDE is discarded),
+eta = 2[1 - 1.2 exp(-0.9 x)] (QAA v5), and the four S_dg options, all from the one
+subsurface blue/green ratio x = r_rs(443)/r_rs(555) = 0.301. Notable: GIOP's own
+`sdg='obpg'` option gives 0.0121, within 7 % of the value chi2 independently prefers
+(0.0113), while the GIOP-DC default 0.018 is 59 % high.
+
+`giop6_all_fits.png` — now shows BOTH configurations on every panel. It was
+constrained-only, which made the misfit look like a property of GIOP rather than of that
+choice of shapes. Median RMS 10.9 % constrained vs 8.5 % free.
+
+`giop10_final_result.png` + `giop_FINAL.csv` — THE headline. Per-spectrum points, their
+mean, and the fit of the mean spectrum, for constrained / free / maximum-freedom. Also
+carries the self-consistency test (M_phi vs its own seed: stable fixed point 11.18
+against OC4 9.84, agreement to 14 %) and the maximum-freedom arm, which releases the
+a*_phi family/seed as well -- something `fit_shapes=True` does NOT do.
+
+Headline: a_dg(443) and b_bp(443) are stable across both free arms (0.2 % and 3 %), so
+quote 0.78 m^-1 and 0.042 m^-1. M_phi is not: 11.5 constrained, 2.3 free, 1.7 max free.
+Nothing fits -- best chi2_nu is 17 against a 1.9 % measured band uncertainty.

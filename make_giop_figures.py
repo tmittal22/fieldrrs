@@ -94,7 +94,21 @@ def f_bands(wl, mean, ssd, chl, out):
 
 # ------------------------------------------------------------------ figure 2
 def f_oc4(wl, mean, out):
-    """OC4 in full: where the number comes from."""
+    """The SEED CHAIN: where every prescribed number in the inversion comes from.
+
+    Three of the model's inputs are not fitted and not measured -- they are computed
+    from the spectrum itself by published parameterisations, before the inversion runs:
+
+        OC4 chlorophyll -> selects the Bricaud a*_phi SHAPE (and nothing else)
+        eta             -> QAA v5, from the subsurface blue/green ratio
+        S_dg            -> GIOP-DC fixes it at 0.018; 'qaa' and 'obpg' compute it
+
+    Each is shown as its formula, evaluated on this spectrum, so the reader can see how
+    much of the answer was decided before any fitting happened.
+    """
+    from giop.aphstar import BRICAUD_NORM_VALUE, BRICAUD_NORM_WL, bricaud1998
+    from giop.model import eta_qaa, sdg_from_option
+
     r = at(wl, mean, np.array([443., 490, 510, 555]))
     a = _OC_COEF["oc4"]
     num = max(r[0], r[1], r[2]); which = [443, 490, 510][int(np.argmax(r[:3]))]
@@ -102,7 +116,18 @@ def f_oc4(wl, mean, out):
     poly = a[0] + a[1] * X + a[2] * X ** 2 + a[3] * X ** 3 + a[4] * X ** 4
     chl = 10 ** poly
 
-    fig, axes = plt.subplots(1, 2, figsize=(14, 5.2))
+    m = (wl >= LO) & (wl <= HI)
+    W, R = wl[m], mean[m]
+    cfg = GiopConfig()
+    rin = rrs_above_to_below(R, cfg.trans)
+    idx = find_anchor_bands(W)
+    ratio = rin[idx["443"]] / rin[idx["555"]]
+    eta = eta_qaa(rin, idx["443"], idx["555"])
+    sdg = {k: sdg_from_option(k, R, rin, idx["412"], idx["443"], idx["555"])
+           for k in ("qaa", "obpg", "gsm")}
+
+    fig, axes = plt.subplots(2, 2, figsize=(15, 10.2))
+    axes = axes.ravel()
     ax = axes[0]
     xs = np.linspace(-0.6, 0.6, 400)
     ys = 10 ** (a[0] + a[1] * xs + a[2] * xs ** 2 + a[3] * xs ** 3 + a[4] * xs ** 4)
@@ -131,10 +156,67 @@ def f_oc4(wl, mean, out):
     ax.set_ylabel("$R_{rs}$  sr$^{-1}$"); ax.grid(alpha=0.25, axis="y")
     ax.set_title("The four numbers OC4 uses (red = the one selected)", fontsize=10.5,
                  loc="left")
-    fig.suptitle("Where the OC4 chlorophyll comes from — NASA OC v6 coefficients, "
-                 "ported from get_oc.m", fontsize=12)
-    fig.tight_layout(rect=(0, 0, 1, 0.91))
-    p = os.path.join(out, "giop2_oc4_explained.png")
+
+    # --- (c) what the OC4 number is actually FOR: it picks the aph* shape
+    ax = axes[2]
+    seeds = [0.5, 2.0, chl, 20.0, 50.0]
+    for c_, col in zip(seeds, ["#bbbbbb", "#8fbcd4", "#c0392b", "#7fa87f", "#555555"]):
+        y = bricaud1998(c_, W)
+        lw = 3.0 if abs(c_ - chl) < 1e-9 else 1.4
+        ax.plot(W, y, lw=lw, color=col,
+                label="chl=%.2f%s  $a^*_\\phi(443)/a^*_\\phi(675)$=%.2f"
+                      % (c_, "  <- OC4" if abs(c_ - chl) < 1e-9 else "",
+                         y[np.argmin(abs(W - 443))] / y[np.argmin(abs(W - 675))]))
+    ax.axvline(BRICAUD_NORM_WL, color="#333", ls=":", lw=1.2)
+    ax.text(BRICAUD_NORM_WL + 3, ax.get_ylim()[1] * 0.95,
+            "normalised:\n$a^*_\\phi$(%g) = %g" % (BRICAUD_NORM_WL, BRICAUD_NORM_VALUE),
+            fontsize=8)
+    ax.set_xlabel("wavelength (nm)")
+    ax.set_ylabel("$a^*_\\phi$  m$^2$ mg$^{-1}$")
+    ax.legend(fontsize=7.5); ax.grid(alpha=0.25)
+    ax.set_title("The OC4 number does ONE thing: it selects the $a^*_\\phi$ SHAPE.\n"
+                 "$a^*_\\phi(\\lambda) = A_\\phi(\\lambda)\\,\\mathrm{chl}^{\\,"
+                 "E_\\phi(\\lambda)-1}$, frozen at the seed — GIOP does NOT iterate.",
+                 fontsize=9.5, loc="left")
+
+    # --- (d) eta and S_dg: computed, not fitted, not measured
+    ax = axes[3]
+    x = np.linspace(0.05, 3.0, 300)
+    ax.plot(x, 2.0 * (1.0 - 1.2 * np.exp(-0.9 * x)), lw=2.4, color="#2c6f9b",
+            label="$\\eta$  QAA v5")
+    ax.plot(x, 100 * (0.015 + 0.002 / (0.6 + x)), lw=2.4, color="#8a6000",
+            label="$S_{dg}$ 'qaa'  ($\\times$100)")
+    ax.axhline(100 * 0.018, color="#c0392b", ls="--", lw=1.8,
+               label="$S_{dg}$ GIOP-DC default 0.018 ($\\times$100)")
+    ax.axhline(100 * sdg["obpg"], color="#2e7d32", ls="-.", lw=1.8,
+               label="$S_{dg}$ 'obpg' here = %.4f ($\\times$100)" % sdg["obpg"])
+    ax.axhline(100 * 0.0113, color="#ff2d55", ls=":", lw=2.4,
+               label="$S_{dg}$ FITTED here = 0.0113 ($\\times$100)")
+    ax.axvline(ratio, color="k", lw=1.4)
+    ax.plot([ratio], [eta], "*", ms=20, color="#2c6f9b", mec="k", zorder=5)
+    ax.plot([ratio], [100 * sdg["qaa"]], "*", ms=20, color="#8a6000", mec="k", zorder=5)
+    ax.annotate("this spectrum\n$r_{rs}$(443)/$r_{rs}$(555) = %.3f\n"
+                "$\\Rightarrow \\eta$ = %.3f,  $S_{dg}^{qaa}$ = %.4f"
+                % (ratio, eta, sdg["qaa"]), (ratio, eta), xytext=(30, -55),
+                textcoords="offset points", fontsize=8.5,
+                arrowprops=dict(arrowstyle="->"))
+    ax.set_xlabel("subsurface blue/green ratio  $r_{rs}$(443) / $r_{rs}$(555)")
+    ax.set_ylabel("$\\eta$   /   $S_{dg}\\times$100  (nm$^{-1}$)")
+    ax.legend(fontsize=7.5, loc="upper right"); ax.grid(alpha=0.25)
+    ax.set_title("$\\eta = 2\\,[1 - 1.2\\,e^{-0.9\\,x}]$ (QAA v5) and "
+                 "$S_{dg} = 0.015 + 0.002/(0.6+x)$, both from the SAME ratio $x$.\n"
+                 "GIOP's own 'obpg' option lands at %.4f, within %.0f %% of the fitted "
+                 "value; the DC default 0.018 is %.0f %% high."
+                 % (sdg["obpg"], 100 * abs(sdg["obpg"] / 0.0113 - 1),
+                    100 * (0.018 / 0.0113 - 1)), fontsize=9.5, loc="left")
+
+    fig.suptitle("THE SEED CHAIN — everything the inversion prescribes before it fits "
+                 "anything, and where each number comes from.\nOC4 (NASA OC v6, "
+                 "get_oc.m) selects the $a^*_\\phi$ shape; $\\eta$ and $S_{dg}$ come "
+                 "from one blue/green ratio. None of these is fitted, and none is "
+                 "measured.", fontsize=12)
+    fig.tight_layout(rect=(0, 0, 1, 0.93))
+    p = os.path.join(out, "giop2_seed_chain.png")
     fig.savefig(p, dpi=140); plt.close(fig)
     return p, chl, X, which
 
@@ -267,8 +349,12 @@ def f_sdg(wl, mean, ssd, chl, out):
     return p
 
 
-def _perscan_fits(loc, chl):
-    """GIOP on each angle-matched pair, keeping the spectra and the IOPs."""
+def _perscan_fits(loc, chl, free=False):
+    """GIOP on each angle-matched pair, keeping the spectra and the IOPs.
+
+    ``free=True`` also fits S_dg and eta per spectrum -- the maximum-freedom
+    configuration, which on this water is also the best-fitting one.
+    """
     from analyse_location import match_by_angle
     from fieldrrs.rrs import rho_at_angle, rrs_three_scan, view_zenith_from_tilt
     from organize_by_location import survey
@@ -288,16 +374,12 @@ def _perscan_fits(loc, chl):
                                     w["spec"].columns["rad_ref"], 0.99, rho,
                                     "none").rrs)[m]
         try:
-            g = run(W, v, chl)
+            g = run(W, v, chl, **(dict(fit_shapes=True, n_starts=4) if free else {}))
             rin = rrs_above_to_below(v, cfg.trans)
-            idx = find_anchor_bands(W)
-            adgs, bbps, aphs, sdg, eta = eigenvectors(W, cfg, chl, v, rin, idx)
-            Mdg, Mbp, Mphi = g.x
-            rmod = rrs_from_iops(a_water(W) + Mphi * aphs + Mdg * adgs,
-                                 bb_water(W) + Mbp * bbps, GORDON_G0, GORDON_G1)
+            rmod = g.rrs_model_subsurface
             out.append({"n": w["n"], "sky": sk["n"], "dm": dm, "W": W, "rrs": v,
                         "rin": rin, "rmod": rmod, "M": g.chl, "adg": g.adg443,
-                        "bbp": g.bbp443, "eta": eta,
+                        "bbp": g.bbp443, "eta": g.eta, "sdg": g.sdg,
                         "rms": 100 * float(np.sqrt(np.mean((rmod / rin - 1) ** 2))),
                         "amp": float(v[int(np.argmin(abs(W - 555)))]), "ok": True})
         except Exception:
@@ -307,32 +389,51 @@ def _perscan_fits(loc, chl):
 
 # ------------------------------------------------------------------ figure 6
 def f_perscan(loc, chl, out):
-    """All twelve fits, spectrum by spectrum."""
-    fits = _perscan_fits(loc, chl)
+    """All twelve fits, spectrum by spectrum, in BOTH configurations.
+
+    Earlier this showed only the constrained fit (S_dg fixed at 0.018, eta from QAA,
+    three amplitudes free). That is not the best the model can do, and showing only it
+    made the misfit look like an inevitable property of GIOP rather than of that
+    particular choice of shapes. Both are now drawn on every panel.
+    """
+    fits = _perscan_fits(loc, chl, free=False)
+    fr = {f["n"]: f for f in _perscan_fits(loc, chl, free=True)}
     n = len(fits)
-    fig, axes = plt.subplots(3, 4, figsize=(17, 10.5), sharex=True)
+    fig, axes = plt.subplots(3, 4, figsize=(17.5, 11), sharex=True)
     for ax, f in zip(axes.flat, fits):
-        ax.plot(f["W"], f["rin"], lw=1.8, color="#1f7a99", label="measured")
-        ax.plot(f["W"], f["rmod"], lw=1.6, ls="--", color="#c0392b", label="GIOP")
-        ax.set_title("water %s + sky %s   $\\Delta\\theta$=%.1f$^\\circ$\n"
-                     "$M_\\phi$=%.1f  $a_{dg}$=%.2f  $b_{bp}$=%.3f   RMS %.1f %%"
-                     % (f["n"], f["sky"], f["dm"], f["M"], f["adg"], f["bbp"],
-                        f["rms"]), fontsize=8.5, loc="left")
+        g = fr.get(f["n"])
+        ax.plot(f["W"], f["rin"], lw=2.0, color="#1f7a99", label="measured")
+        ax.plot(f["W"], f["rmod"], lw=1.5, ls="--", color="#c0392b",
+                label="CONSTRAINED  ($S_{dg}$=0.018)")
+        t = ("water %s + sky %s   $\\Delta\\theta$=%.1f$^\\circ$\n"
+             "fixed:  $M_\\phi$=%.1f  $a_{dg}$=%.2f  $b_{bp}$=%.3f   RMS %.1f %%"
+             % (f["n"], f["sky"], f["dm"], f["M"], f["adg"], f["bbp"], f["rms"]))
+        if g:
+            ax.plot(g["W"], g["rmod"], lw=1.5, ls="-.", color="#2e7d32",
+                    label="FREE  ($S_{dg}$, $\\eta$ fitted)")
+            t += ("\nFREE:  $M_\\phi$=%.1f  $a_{dg}$=%.2f  $b_{bp}$=%.3f   RMS %.1f %%"
+                  "   $S_{dg}$=%.4f $\\eta$=%+.2f"
+                  % (g["M"], g["adg"], g["bbp"], g["rms"], g["sdg"], g["eta"]))
+        ax.set_title(t, fontsize=7.6, loc="left")
         ax.grid(alpha=0.25); ax.tick_params(labelsize=8)
     for ax in axes.flat[n:]:
         ax.axis("off")
-    axes[0][0].legend(fontsize=8)
+    axes[0][0].legend(fontsize=7.5)
     for ax in axes[-1]:
         ax.set_xlabel("wavelength (nm)")
     for row in axes:
         row[0].set_ylabel("$r_{rs}$ below surface")
-    fig.suptitle("All %d angle-matched fits, hyperspectral 400-700 nm.   "
-                 "$S_{dg}$ FIXED at 0.018, $\\eta$ DERIVED from each spectrum by QAA, "
-                 "only the three amplitudes are free." % n, fontsize=12.5)
-    fig.tight_layout(rect=(0, 0, 1, 0.955))
+    fmed = np.median([f["rms"] for f in fits])
+    gmed = np.median([g["rms"] for g in fr.values()]) if fr else np.nan
+    fig.suptitle("All %d angle-matched fits, hyperspectral 400-700 nm, in BOTH "
+                 "configurations.\nCONSTRAINED (red, GIOP-DC: $S_{dg}$=0.018, $\\eta$ "
+                 "from QAA, 3 free amplitudes) median RMS %.1f %%  vs  FREE (green: "
+                 "$S_{dg}$ and $\\eta$ fitted too, 5 free) median RMS %.1f %%."
+                 % (n, fmed, gmed), fontsize=12)
+    fig.tight_layout(rect=(0, 0, 1, 0.945))
     p = os.path.join(out, "giop6_all_fits.png")
     fig.savefig(p, dpi=135); plt.close(fig)
-    return p, fits
+    return p, fits, list(fr.values())
 
 
 # ------------------------------------------------------------------ figure 7
@@ -709,6 +810,228 @@ def f_chi2(wl, mean, ssd, oc4, out):
     return p, arms, C, wgt, nu, rho1, neff, (sd[k[1]], et[k[0]], Z.min()), adm
 
 
+# ------------------------------------------------------------------ figure 10
+#: Seed grid for the maximum-freedom arm. Spans well past OC4 in both directions.
+SEEDS = np.array([0.5, 1.0, 2.0, 3.0, 5.0, 8.0, 12.0, 20.0, 30.0, 50.0])
+
+
+def _maxfree(W, R, S, sig, oc4):
+    """Maximum freedom: S_dg, eta AND the a*_phi shape, with nothing seeded by OC4.
+
+    ``fit_shapes=True`` alone does NOT do this. It frees S_dg and eta, but a*_phi is
+    built once from the chlorophyll seed and held fixed inside the profile, so the OC4
+    number -- a Case-1 band ratio, on Case-2 water -- still sets the phytoplankton
+    shape. Here the seed is profiled over as well, and the Ciotti size-parameterised
+    family (which needs no chlorophyll at all) is included, so the reported arm is the
+    best the model can do with every prescribed shape released.
+    """
+    nu = len(W) - 3
+    best = None
+    for lab, kw in ([("Bricaud seed %.3g" % c, dict(aph="bricaud")) for c in SEEDS] +
+                    [("Ciotti sf=%.2f" % sf, dict(aph="ciotti", sf=float(sf)))
+                     for sf in np.linspace(0, 1, 6)]):
+        seed = float(lab.split()[-1]) if lab.startswith("Bricaud") else oc4
+        try:
+            g = giop(W, R, seed, inv="bounded", sigma=sig, fit_shapes=True,
+                     n_starts=4, **kw)
+            c2, _ = _chi2(g, R, S)
+        except Exception:
+            continue
+        if best is None or c2 < best[0]:
+            best = (c2, lab, g)
+    c2, lab, g = best
+    return dict(M=g.chl, adg=g.adg443, bbp=g.bbp443, sdg=g.sdg, eta=g.eta,
+                c2n=c2 / nu, arm=lab,
+                rms=100 * float(np.sqrt(np.mean(((g.rrs_model_above - R) / R) ** 2))))
+
+
+def f_final(wl, mean, ssd, oc4, fits_fix, fits_free, out):
+    """THE FINAL RESULT. Mean and per-spectrum, constrained and free, side by side.
+
+    Everything else in this folder is diagnosis. This is the number to quote, with the
+    two independent spreads kept apart: the SCATTER ACROSS SCANS (real water plus
+    pairing) and the CHOICE OF CONFIGURATION (which is a modelling decision, not an
+    error bar).
+    """
+    import warnings
+    warnings.filterwarnings("ignore")
+    m = (wl >= LO) & (wl <= HI)
+    W, R, S = wl[m], mean[m], ssd[m]
+    nu = len(W) - 3
+    sig = np.sqrt((0.05 * np.abs(R)) ** 2 + 2e-4 ** 2)
+
+    gfix = run(W, R, oc4)
+    gfre = giop(W, R, oc4, inv="bounded", sigma=sig, fit_shapes=True, n_starts=4)
+    mean_row = {}
+    for lab, g in (("constrained", gfix), ("free", gfre)):
+        c2, _ = _chi2(g, R, S)
+        mean_row[lab] = dict(M=g.chl, adg=g.adg443, bbp=g.bbp443, sdg=g.sdg,
+                             eta=g.eta, c2n=c2 / nu,
+                             rms=100 * float(np.sqrt(np.mean(
+                                 ((g.rrs_model_above - R) / R) ** 2))))
+
+    mean_row["max free"] = _maxfree(W, R, S, sig, oc4)
+
+    # Self-consistency. Bricaud gives ABSOLUTE a_phi = A_phi chl^E_phi; GIOP divides by
+    # chl to get the specific a*_phi, normalises it, and then fits a FREE amplitude --
+    # so it uses the seed's SHAPE and discards its AMPLITUDE. If the seed were believed,
+    # M_phi would simply BE the chlorophyll. Whether the retrieval reproduces its own
+    # seed is therefore a real internal check, and GIOP never performs it because it
+    # deliberately does not iterate.
+    fixed_pt = []
+    for c_ in SEEDS:
+        try:
+            fixed_pt.append((float(c_), run(W, R, float(c_)).chl))
+        except Exception:
+            pass
+    fixed_pt = np.array(fixed_pt)
+    # There are TWO roots and only one of them means anything. d = M_phi - seed crosses
+    # zero from below at a low seed (where M_phi has collapsed to the 0 bound -- an
+    # UNSTABLE root: iterate away from it and you never come back) and from above at a
+    # high seed (STABLE: iterating the seed converges there). Taking the first crossing
+    # reports the artefact. Keep both, mark the stable one.
+    d = fixed_pt[:, 1] - fixed_pt[:, 0]
+    roots = []
+    for i in np.flatnonzero(np.sign(d[:-1]) != np.sign(d[1:])):
+        i = int(i)
+        x0 = float(fixed_pt[i, 0] - d[i] * (fixed_pt[i + 1, 0] - fixed_pt[i, 0])
+                   / (d[i + 1] - d[i]))
+        roots.append((x0, "stable" if d[i] > d[i + 1] else "unstable"))
+    stable = [r for r in roots if r[1] == "stable"]
+    cross = stable[-1][0] if stable else np.nan
+
+    keys = [("M", "$M_\\phi$"), ("adg", "$a_{dg}$(443)  m$^{-1}$"),
+            ("bbp", "$b_{bp}$(443)  m$^{-1}$"), ("sdg", "$S_{dg}$  nm$^{-1}$"),
+            ("eta", "$\\eta$"), ("rms", "RMS misfit  %")]
+    fig, axes = plt.subplots(2, 4, figsize=(21, 9.8))
+    axes = axes.ravel()
+
+    ax = axes[6]
+    ax.plot(fixed_pt[:, 0], fixed_pt[:, 1], "o-", lw=2.0, color="#2e7d32")
+    lim = [SEEDS.min(), SEEDS.max()]
+    ax.plot(lim, lim, "k--", lw=1.4, label="$M_\\phi$ = seed (self-consistent)")
+    ax.axvline(oc4, color="#c0392b", ls=":", lw=1.8, label="OC4 = %.2f" % oc4)
+    for x0, kind in roots:
+        ax.plot([x0], [x0], "*" if kind == "stable" else "x", ms=22 if kind == "stable"
+                else 12, color="#ff2d55" if kind == "stable" else "#888", mec="k",
+                mew=1.4, zorder=6,
+                label="%s fixed point  chl = %.2f" % (kind.upper(), x0))
+    ax.set_xscale("log"); ax.set_yscale("log")
+    # M_phi rails at 0 for low seeds, which on a log axis drags the view to 1e-27.
+    ax.set_ylim(0.3, max(fixed_pt[:, 1].max(), SEEDS.max()) * 1.6)
+    ax.set_xlabel("chlorophyll SEED (sets the $a^*_\\phi$ shape)")
+    ax.set_ylabel("$M_\\phi$ RETRIEVED")
+    ax.legend(fontsize=7.5); ax.grid(alpha=0.25)
+    ax.set_title("SELF-CONSISTENCY. GIOP uses the seed's SHAPE and discards its\n"
+                 "AMPLITUDE, then fits $M_\\phi$ free. Stable fixed point chl=%.1f "
+                 "vs OC4 %.1f\n(agreement to %.0f %%). GIOP never runs this check — "
+                 "it does not iterate."
+                 % (cross, oc4, 100 * abs(cross / oc4 - 1)), fontsize=8.5, loc="left")
+
+    ax = axes[7]
+    ax.axis("off")
+    r_ = mean_row["max free"]
+    ax.text(0.0, 0.98,
+            "MAXIMUM FREEDOM\n"
+            "every prescribed shape released:\n"
+            "$S_{dg}$, $\\eta$ AND the $a^*_\\phi$ family/seed\n"
+            "(%d Bricaud seeds + %d Ciotti $S_f$)\n\n"
+            "winning arm:  %s\n\n"
+            "$M_\\phi$      = %.3g\n"
+            "$a_{dg}$(443) = %.4g m$^{-1}$\n"
+            "$b_{bp}$(443) = %.4g m$^{-1}$\n"
+            "$S_{dg}$      = %.5g nm$^{-1}$\n"
+            "$\\eta$        = %+.3g\n"
+            "$\\chi^2_\\nu$      = %.1f\n"
+            "RMS       = %.1f %%\n\n"
+            "vs constrained $\\chi^2_\\nu$ = %.0f\n"
+            "vs 'free' (OC4-seeded) = %.0f\n\n"
+            "⚠ 'free' is NOT assumption-free:\n"
+            "fit_shapes seeds $a^*_\\phi$ from OC4\n"
+            "and holds it fixed. Only this arm\n"
+            "releases it — and it buys only\n"
+            "18 -> 17, while releasing $S_{dg}$\n"
+            "bought 74 -> 18. The CDOM slope\n"
+            "matters far more than the seed."
+            % (len(SEEDS), 6, r_["arm"], r_["M"], r_["adg"], r_["bbp"], r_["sdg"],
+               r_["eta"], r_["c2n"], r_["rms"], mean_row["constrained"]["c2n"],
+               mean_row["free"]["c2n"]),
+            transform=ax.transAxes, va="top", fontsize=8.2, family="monospace",
+            bbox=dict(boxstyle="round,pad=0.6", fc="#f4f8f4", ec="#2e7d32", lw=1.5))
+
+    for ax, (k, lab) in zip(axes[:6], keys):
+        for j, (tag, F, col) in enumerate((("constrained", fits_fix, "#c0392b"),
+                                           ("free", fits_free, "#2e7d32"))):
+            _ = tag
+            v = np.array([f[k] for f in F if k in f], dtype=float)
+            if not v.size:
+                continue
+            x = np.full(v.size, j) + np.linspace(-0.13, 0.13, v.size)
+            ax.plot(x, v, "o", ms=6, color=col, alpha=0.75, mec="k", mew=0.4,
+                    label="%s: per-scan  %.4g $\\pm$ %.0f %%"
+                          % (tag, v.mean(), 100 * v.std() / abs(v.mean())
+                             if v.mean() else np.nan))
+            ax.plot([j - 0.3, j + 0.3], [v.mean()] * 2, lw=2.4, color=col)
+            mv = mean_row[tag][k]
+            ax.plot([j], [mv], "*", ms=22, color="#ff2d55", mec="k", zorder=6,
+                    label="%s: fit of the MEAN  %.4g" % (tag, mv))
+        if k in mean_row["max free"]:
+            ax.axhline(mean_row["max free"][k], color="#6a3d9a", ls="--", lw=1.8,
+                       label="MAX FREEDOM  %.4g" % mean_row["max free"][k])
+        ax.set_xticks([0, 1])
+        ax.set_xticklabels(["CONSTRAINED\n$S_{dg}$=0.018, 3 free",
+                            "FREE\n$S_{dg}$,$\\eta$ fitted, 5 free"], fontsize=9)
+        ax.set_xlim(-0.5, 1.5)
+        ax.set_ylabel(lab); ax.grid(alpha=0.25, axis="y")
+        ax.legend(fontsize=7, loc="best")
+        ax.set_title(lab, fontsize=10.5, loc="left")
+    fig.suptitle("THE FINAL RESULT — per-spectrum points, their mean (bar), and the fit "
+                 "of the amplitude-normalised mean spectrum (star).\n"
+                 "Fitting the mean is NOT the mean of the fits: the inversion is "
+                 "nonlinear. Quote the per-scan spread as the uncertainty and the "
+                 "mean-spectrum fit as the value.\nMean spectrum $\\chi^2_\\nu$: "
+                 "constrained %.0f, free (OC4-seeded) %.0f, MAX FREEDOM %.0f. "
+                 "NONE of these is a good fit."
+                 % (mean_row["constrained"]["c2n"], mean_row["free"]["c2n"],
+                    mean_row["max free"]["c2n"]),
+                 fontsize=11.5)
+    fig.tight_layout(rect=(0, 0, 1, 0.90))
+    p = os.path.join(out, "giop10_final_result.png")
+    fig.savefig(p, dpi=135); plt.close(fig)
+
+    with open(os.path.join(out, "giop_FINAL.csv"), "w", newline="") as fh:
+        w = csv.writer(fh)
+        w.writerow(["# THE headline table. 'mean' = fit of the amplitude-normalised "
+                    "mean spectrum; 'perscan' = mean +- sd over the individual "
+                    "angle-matched fits."])
+        w.writerow(["# constrained = GIOP-DC (S_dg 0.018, eta from QAA, 3 free "
+                    "amplitudes). free = S_dg and eta also fitted (5 free)."])
+        w.writerow(["# NOTHING in this family fits well; see chi2_nu against a "
+                    "measured band uncertainty of %.2f %%." % (100 * np.median(S / R))])
+        w.writerow(["config", "estimate", "M_phi", "adg443", "bbp443", "S_dg", "eta",
+                    "chi2_nu", "rms_pct"])
+        w.writerow(["# max free = S_dg, eta AND the a*_phi family/seed released. "
+                    "'free' alone still seeds a*_phi from OC4."])
+        r_ = mean_row["max free"]
+        w.writerow(["max free", "mean_spectrum (%s)" % r_["arm"]] +
+                   ["%.6g" % r_[k] for k in
+                    ("M", "adg", "bbp", "sdg", "eta", "c2n", "rms")])
+        w.writerow(["# self-consistency: seed -> retrieved M_phi fixed point"])
+        w.writerow(["fixed_point_chl_STABLE", "%.6g" % cross, "OC4", "%.6g" % oc4] +
+                   ["%s=%.6g" % (k, v) for v, k in roots])
+        for tag, F in (("constrained", fits_fix), ("free", fits_free)):
+            r_ = mean_row[tag]
+            w.writerow([tag, "mean_spectrum"] +
+                       ["%.6g" % r_[k] for k in
+                        ("M", "adg", "bbp", "sdg", "eta", "c2n", "rms")])
+            for stat, fn in (("perscan_mean", np.mean), ("perscan_sd", np.std)):
+                w.writerow([tag, stat] + ["%.6g" % fn([f[k] for f in F if k in f])
+                                          if any(k in f for f in F) else ""
+                                          for k in ("M", "adg", "bbp", "sdg", "eta")] +
+                           ["", "%.6g" % fn([f["rms"] for f in F])])
+    return p, mean_row
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("location", help="by_location/LOC*/FOREOPTIC_FOVxx")
@@ -727,12 +1050,25 @@ def main():
     ps.append(f_fit(wl, mean, chl, a.out))
     p, store = f_uncertainty(wl, mean, ssd, chl, a.out); ps.append(p)
     ps.append(f_sdg(wl, mean, ssd, chl, a.out))
-    p, fits = f_perscan(loc, chl, a.out); ps.append(p)
+    p, fits, fits_free = f_perscan(loc, chl, a.out); ps.append(p)
     p, D, names = f_covariance(fits, a.out); ps.append(p)
     p, A, Bc, free, chls, sfs = f_assumption_free(loc, wl, mean, ssd, chl, a.out)
     ps.append(p)
     p, arms, C, wgt, nu, rho1, neff, best, adm = f_chi2(wl, mean, ssd, chl, a.out)
     ps.append(p)
+    p, mean_row = f_final(wl, mean, ssd, chl, fits, fits_free, a.out); ps.append(p)
+    print("\nFINAL RESULT")
+    print("   %-13s %9s %9s %9s %9s %8s %9s" % ("config", "M_phi", "adg443", "bbp443",
+                                                "S_dg", "eta", "chi2_nu"))
+    for tag in ("constrained", "free"):
+        r_ = mean_row[tag]
+        print("   %-13s %9.3f %9.4f %9.5f %9.5f %8.3f %9.1f   <- fit of the MEAN"
+              % (tag, r_["M"], r_["adg"], r_["bbp"], r_["sdg"], r_["eta"], r_["c2n"]))
+        F = fits if tag == "constrained" else fits_free
+        for k, nm in (("M", "M_phi"), ("adg", "adg443"), ("bbp", "bbp443")):
+            v = np.array([f[k] for f in F])
+            print("      per-scan %-8s %.4g +/- %.0f %%" % (nm, v.mean(),
+                                                            100 * v.std() / abs(v.mean())))
     print("\nDOES ANYTHING FIT?  nu = %d" % nu)
     print("   best chi2_nu %.1f, worst %.1f  -- a good fit would be ~1"
           % (C.min() / nu, C.max() / nu))

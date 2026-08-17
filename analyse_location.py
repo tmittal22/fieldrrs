@@ -1098,6 +1098,174 @@ def fig_final_mean(water, sky, wl, outdir, tag, panel_r):
 
 
 
+def fig_sky_choice(water, sky, wl, outdir, tag, panel_r):
+    """PER WATER SCAN: which sky is best, what the choice costs, and does it matter.
+
+    fig4 shows the pooled envelope over all pairings and fig5 shows the geometry, but
+    neither answers the question scan by scan: for THIS water spectrum, how much does
+    the sky I pair it with move the answer, and is that movement large compared with the
+    things we already know the size of?
+
+    The three reference scales it is graded against, all measured in this dataset:
+      0.6 %   panel replicate scatter -- the instrument floor
+      1.7 %   shape uncertainty of the amplitude-normalised mean (fig11)
+     11.4 %   scan-to-scan amplitude spread -- real water variability (fig9)
+    """
+    import numpy as np
+
+    FLOOR, SHAPE, WATERSD = 0.6, 1.7, 11.4
+    i443 = min(range(len(wl)), key=lambda k: abs(wl[k] - 443))
+    i555 = min(range(len(wl)), key=lambda k: abs(wl[k] - 555))
+    band_m = [i for i, x in enumerate(wl) if RLO <= x <= RHI]
+
+    rows = []
+    for w in water:
+        lt = w["spec"].columns["rad_target"]
+        lp = w["spec"].columns["rad_ref"]
+        rho = rho_at_angle(view_zenith_from_tilt(w["spec"].tilt_y_deg))
+        tv = view_zenith_from_tilt(w["spec"].tilt_y_deg)
+        curves, dth = [], []
+        for sk in sky:
+            curves.append(rrs_three_scan(wl, lt, sk["spec"].columns["rad_target"], lp,
+                                         panel_r, rho, "none").rrs)
+            dth.append(abs(view_zenith_from_tilt(sk["spec"].tilt_y_deg) - tv))
+        C = np.array(curves)
+        best = int(np.argmin(dth))
+        rows.append(dict(n=w["n"], C=C, best=best, sky_best=sky[best]["n"],
+                         dth=dth[best],
+                         # what the CHOICE costs: sd across the 8 skies, per band
+                         sd443=100 * C[:, i443].std() / C[:, i443].mean(),
+                         sd555=100 * C[:, i555].std() / C[:, i555].mean(),
+                         sdband=100 * float(np.mean(C[:, band_m].std(axis=0)
+                                                    / C[:, band_m].mean(axis=0))),
+                         # what the angle-matched choice differs from the naive
+                         # average-all-skies choice by, which is the practical question
+                         d443=100 * (C[best, i443] / C[:, i443].mean() - 1),
+                         d555=100 * (C[best, i555] / C[:, i555].mean() - 1),
+                         dband=100 * float(np.mean(np.abs(C[best, band_m]
+                                                          / C[:, band_m].mean(axis=0)
+                                                          - 1)))))
+
+    fig = plt.figure(figsize=(17.5, 10.6))
+
+    ax = fig.add_subplot(2, 2, 1)
+    x = np.arange(len(rows))
+    ax.bar(x - 0.2, [r["sd443"] for r in rows], 0.4, color="#2c6f9b", label="443 nm")
+    ax.bar(x + 0.2, [r["sd555"] for r in rows], 0.4, color="#2e7d32", label="555 nm")
+    for y, c, l in ((FLOOR, "#888", "instrument floor 0.6 %"),
+                    (SHAPE, "#8a6000", "shape uncertainty 1.7 %"),
+                    (WATERSD, "#c0392b", "real water spread 11.4 %")):
+        ax.axhline(y, color=c, ls="--", lw=1.6)
+        ax.text(len(rows) - 0.4, y * 1.04, l, fontsize=8, color=c, ha="right")
+    ax.set_xticks(x); ax.set_xticklabels([r["n"] for r in rows], rotation=90, fontsize=7)
+    ax.set_ylabel("sd across the %d sky choices  (%%)" % len(sky))
+    ax.legend(fontsize=8.5); ax.grid(alpha=0.25, axis="y")
+    ax.set_title("WHAT THE SKY CHOICE COSTS, scan by scan.\nmedian %.2f %% at 443, "
+                 "%.2f %% at 555 — %.1fx below the real water spread"
+                 % (np.median([r["sd443"] for r in rows]),
+                    np.median([r["sd555"] for r in rows]),
+                    WATERSD / max(np.median([r["sd443"] for r in rows]), 1e-9)),
+                 fontsize=10, loc="left")
+
+    ax = fig.add_subplot(2, 2, 2)
+    ax.bar(x - 0.2, [r["d443"] for r in rows], 0.4, color="#2c6f9b", label="443 nm")
+    ax.bar(x + 0.2, [r["d555"] for r in rows], 0.4, color="#2e7d32", label="555 nm")
+    ax.axhline(0, color="k", lw=1)
+    for s in (1, -1):
+        ax.axhline(s * FLOOR, color="#888", ls=":", lw=1.4)
+    ax.set_xticks(x); ax.set_xticklabels([r["n"] for r in rows], rotation=90, fontsize=7)
+    ax.set_ylabel("angle-matched $-$ average-of-all-skies  (%)")
+    ax.legend(fontsize=8.5); ax.grid(alpha=0.25, axis="y")
+    ax.set_title("DOES THE MATCHING CHANGE THE ANSWER? Angle-matched sky against\n"
+                 "simply averaging every sky. |mean| %.2f %% at 443, worst %.2f %%. "
+                 "Dotted = instrument floor."
+                 % (np.mean([abs(r["d443"]) for r in rows]),
+                    max(abs(r["d443"]) for r in rows)), fontsize=10, loc="left")
+
+    # the widest-spread scan, spelled out
+    worst = max(rows, key=lambda r: r["sdband"])
+    ax = fig.add_subplot(2, 2, 3)
+    # clip() returns (wl, v) -- unpack it. Passing the tuple straight into plot() makes
+    # both arguments 2-D and silently draws one line per band.
+    for i in range(len(sky)):
+        xs, ys = clip(wl, worst["C"][i], RLO, RHI)
+        ax.plot(xs, ys, lw=1.0, color="#bbbbbb",
+                label="each of the %d sky choices" % len(sky) if i == 0 else None)
+    xs, ys = clip(wl, worst["C"][worst["best"]], RLO, RHI)
+    ax.plot(xs, ys, lw=2.6, color="#c0392b",
+            label="angle-matched sky %s ($\\Delta\\theta$=%.1f$^\\circ$)"
+                  % (worst["sky_best"], worst["dth"]))
+    xs, ys = clip(wl, worst["C"].mean(axis=0), RLO, RHI)
+    ax.plot(xs, ys, lw=2.0, ls="--", color="#2c6f9b",
+            label="average of all %d skies" % len(sky))
+    ax.set_xlim(RLO, RHI)
+    ax.set_xlabel("wavelength (nm)"); ax.set_ylabel("$R_{rs}$  sr$^{-1}$")
+    ax.legend(fontsize=8.5); ax.grid(alpha=0.25)
+    ax.set_title("Water %s — the WORST case in this station (%.2f %% band-mean "
+                 "spread).\nGrey = every sky choice." % (worst["n"], worst["sdband"]),
+                 fontsize=10, loc="left")
+
+    ax = fig.add_subplot(2, 2, 4)
+    ax.axis("off")
+    med = np.median([r["sdband"] for r in rows])
+    mx = max(r["sdband"] for r in rows)
+    m443 = np.median([r["sd443"] for r in rows])
+    m555 = np.median([r["sd555"] for r in rows])
+    verdict = ("IT DEPENDS ON THE BAND, and that is the useful answer.\n"
+               "  443 nm : %.2f %% -- %s\n"
+               "  555 nm : %.2f %% -- %s\n"
+               "The blue is where the sky radiance is largest relative to\n"
+               "the water signal, so rho*L_sky is the biggest term there.\n"
+               "Anything read off the BLUE (band ratios, OC4, a_dg) carries\n"
+               "this; anything read off the green does not."
+               % (m443, "ABOVE the %.1f %% shape uncertainty" % SHAPE
+                  if m443 > SHAPE else "below the shape uncertainty",
+                  m555, "BELOW the %.1f %% instrument floor" % FLOOR
+                  if m555 < FLOOR else "above the instrument floor"))
+    ax.text(0.0, 0.97,
+            "DOES THE SKY CHOICE MATTER, AT THE SCALE WE HAVE?\n"
+            "%s\n\n"
+            "spread from the sky choice, 400-900 nm band mean\n"
+            "   median over the %d water scans : %5.2f %%\n"
+            "   worst single scan              : %5.2f %%  (water %s)\n\n"
+            "reference scales measured in this dataset\n"
+            "   panel replicates, instrument floor : %5.2f %%\n"
+            "   shape uncertainty of the mean      : %5.2f %%\n"
+            "   scan-to-scan water variability     : %5.2f %%\n\n"
+            "angle-matched vs averaging every sky\n"
+            "   mean |difference| at 443 nm : %5.2f %%\n"
+            "   worst                        : %5.2f %%\n\n"
+            "The angle-matched sky gives a SYSTEMATICALLY higher blue\n"
+            "than averaging every sky (%d of %d scans positive), so this\n"
+            "is a bias, not scatter. The sky scans span only ~5 deg here,\n"
+            "so there is little geometry to match; widening the sky\n"
+            "angular coverage is what would make matching worth doing\n"
+            "(NEXT_CAMPAIGN.md, Tier 2 item 4)."
+            % (verdict, len(rows), med, mx, worst["n"], FLOOR, SHAPE, WATERSD,
+               np.mean([abs(r["d443"]) for r in rows]),
+               max(abs(r["d443"]) for r in rows),
+               sum(1 for r in rows if r["d443"] > 0), len(rows)),
+            transform=ax.transAxes, va="top", fontsize=9.5, family="monospace",
+            bbox=dict(boxstyle="round,pad=0.7", fc="#f7f7f7", ec="#555", lw=1.4))
+
+    fig.suptitle("PER-SCAN SKY PAIRING — %s" % tag, fontsize=12.5)
+    fig.tight_layout(rect=(0, 0, 1, 0.945), h_pad=3.5)
+    p = os.path.join(outdir, "fig13_sky_choice_per_scan.png")
+    fig.savefig(p, dpi=140); plt.close(fig)
+
+    with open(os.path.join(outdir, "sky_choice_per_scan.csv"), "w", newline="") as fh:
+        w_ = csv.writer(fh)
+        w_.writerow(["# per water scan: the angle-matched sky, the spread the sky "
+                     "choice causes, and the difference from averaging all skies"])
+        w_.writerow(["water", "best_sky", "dtheta_deg", "sd443_pct", "sd555_pct",
+                     "sdband_pct", "diff443_pct", "diff555_pct", "diffband_pct"])
+        for r in rows:
+            w_.writerow([r["n"], r["sky_best"], "%.2f" % r["dth"]] +
+                        ["%.4f" % r[k] for k in ("sd443", "sd555", "sdband",
+                                                 "d443", "d555", "dband")])
+    return p, rows
+
+
 #: What each figure settles. Written into analysis/README.md so the index cannot drift
 #: from the figures: every entry is checked against the file the run actually produced.
 FIG_INDEX = [
@@ -1145,6 +1313,13 @@ FIG_INDEX = [
      "re-formed, repeat. Separates the 1.7 % shape uncertainty from the 11 % amplitude "
      "spread instead of reporting one inflated number at every band. Full derivation and "
      "the rank-1 SVD equivalence in THEORY_SCALED_MEAN.md."),
+    ("fig13_sky_choice_per_scan.png", "Per-scan sky pairing: does the choice matter?",
+     "For EACH water scan: which sky the angle matcher picked, the spread that the "
+     "choice of sky causes, and the difference between angle-matching and simply "
+     "averaging every sky -- all graded against three scales measured in this dataset "
+     "(0.6 % instrument floor, 1.7 % shape uncertainty, 11.4 % real water spread). "
+     "Answers 'does it matter at the scale we have' with a number rather than a "
+     "judgement. Numbers also in `sky_choice_per_scan.csv`."),
     ("fig12_FINAL_mean_Rrs.png", "FINAL_Rrs.csv, plotted",
      "The spectrum that goes into GIOP, with its shape uncertainty band. This is the one "
      "to quote."),
@@ -1453,11 +1628,29 @@ def main():
         P("  The bare target doubles as a check on the E_d chain: a mineral surface")
         P("  should be spectrally smooth and grey, and it is.")
 
+    p13, skyrows = fig_sky_choice(water, sky, wl, outdir, tag, a.panel_reflectance)
+    P("")
+    P("PER-SCAN SKY PAIRING  (fig13, sky_choice_per_scan.csv)")
+    P("  For each water scan: which sky the angle matcher picked, how much the CHOICE")
+    P("  of sky moves R_rs, and how that compares with scales we already know.")
+    P("  %-7s %-7s %7s %9s %9s %10s" % ("water", "sky", "dtheta", "sd443 %",
+                                        "sd555 %", "vs mean %"))
+    for r in skyrows:
+        P("  %-7s %-7s %7.1f %9.2f %9.2f %10.2f"
+          % (r["n"], r["sky_best"], r["dth"], r["sd443"], r["sd555"], r["d443"]))
+    import numpy as _np
+    _med = _np.median([r["sdband"] for r in skyrows])
+    _mx = max(r["sdband"] for r in skyrows)
+    P("  band-mean spread from the sky choice: median %.2f %%, worst %.2f %%"
+      % (_med, _mx))
+    P("  against 0.6 % instrument floor, 1.7 % shape uncertainty, 11.4 % water spread")
+    P("  -> %s" % ("the sky choice does NOT matter at this scale" if _mx < 1.7 else
+                   "the worst scans exceed the shape uncertainty"))
     txt = "\n".join(L)
     print(txt)
     with open(os.path.join(outdir, "REPORT.txt"), "w") as fh:
         fh.write(txt + "\n")
-    figs = (p1, p2, p3, p4, p5, p6, p7, p8, p9, p10, p11, p12)
+    figs = (p1, p2, p3, p4, p5, p6, p7, p8, p9, p10, p11, p12, p13)
     write_index(outdir, tag, figs, len(scans), len(sky), len(water), len(land))
     print("\nwrote %s/REPORT.txt" % outdir)
     print("wrote %s/README.md" % outdir)
@@ -1465,6 +1658,7 @@ def main():
     for p in figs:
         if p:
             print("wrote %s" % p)
+    print("wrote %s/sky_choice_per_scan.csv" % outdir)
 
 
 if __name__ == "__main__":

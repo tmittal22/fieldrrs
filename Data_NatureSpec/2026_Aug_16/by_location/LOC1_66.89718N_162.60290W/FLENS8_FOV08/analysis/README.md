@@ -53,6 +53,10 @@ Mean and full spread under each pairing/rho treatment, so the choice is visible 
 
 The iterative scaled mean: each scan rescaled onto the running mean, the mean re-formed, repeat. Separates the 1.7 % shape uncertainty from the 11 % amplitude spread instead of reporting one inflated number at every band. Full derivation and the rank-1 SVD equivalence in THEORY_SCALED_MEAN.md.
 
+### `fig13_sky_choice_per_scan.png` -- Per-scan sky pairing: does the choice matter?
+
+For EACH water scan: which sky the angle matcher picked, the spread that the choice of sky causes, and the difference between angle-matching and simply averaging every sky -- all graded against three scales measured in this dataset (0.6 % instrument floor, 1.7 % shape uncertainty, 11.4 % real water spread). Answers 'does it matter at the scale we have' with a number rather than a judgement. Numbers also in `sky_choice_per_scan.csv`.
+
 ### `fig12_FINAL_mean_Rrs.png` -- FINAL_Rrs.csv, plotted
 
 The spectrum that goes into GIOP, with its shape uncertainty band. This is the one to quote.

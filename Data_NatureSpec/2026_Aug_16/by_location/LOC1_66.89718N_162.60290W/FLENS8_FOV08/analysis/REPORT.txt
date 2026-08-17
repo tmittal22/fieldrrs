@@ -131,3 +131,23 @@ LAND TARGETS -- reported as REFLECTANCE, excluded from R_rs
 
   The bare target doubles as a check on the E_d chain: a mineral surface
   should be spectrally smooth and grey, and it is.
+
+PER-SCAN SKY PAIRING  (fig13, sky_choice_per_scan.csv)
+  For each water scan: which sky the angle matcher picked, how much the CHOICE
+  of sky moves R_rs, and how that compares with scales we already know.
+  water   sky      dtheta   sd443 %   sd555 %  vs mean %
+  00001   00000       1.1      2.91      0.39       3.69
+  00005   00000       2.7      3.04      0.47       3.87
+  00006   00010       0.3      3.11      0.43      -2.30
+  00007   00009       0.4      3.27      0.43       1.95
+  00008   00000       1.4      3.43      0.49       4.35
+  00011   00000       0.6      3.06      0.43       3.89
+  00012   00000       2.3      2.79      0.43       3.54
+  00013   00010       0.1      3.31      0.43      -2.45
+  00016   00009       0.2      2.94      0.40       1.75
+  00017   00002       0.5      2.71      0.37       4.16
+  00018   00009       0.1      2.71      0.38       1.61
+  00019   00000       4.8      2.52      0.36       3.21
+  band-mean spread from the sky choice: median 1.47 %, worst 1.74 %
+  against 0.6 % instrument floor, 1.7 % shape uncertainty, 11.4 % water spread
+  -> the worst scans exceed the shape uncertainty
