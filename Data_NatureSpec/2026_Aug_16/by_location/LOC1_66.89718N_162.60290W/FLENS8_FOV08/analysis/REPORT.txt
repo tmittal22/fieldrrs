@@ -3,6 +3,7 @@ LOC1_66.89718N_162.60290W  ·  FLENS8_FOV08
 ==============================================================================
 22 scans   20:24-20:41 UTC   sun 31.42-32.47 deg   FOV 8 deg
 8 sky, 12 water, 2 LAND targets
+all scans within 2 m and one foreoptic: pairing cannot leave this location
 2 distinct panel references, so the panel was re-taken 1 time(s) mid-station
 range 0.984-1.492 m -> footprint 0.14-0.21 m across (2 R tan(FOV/2))
 
@@ -19,12 +20,27 @@ IS E_d REASONABLE?
   panel-to-panel disagreement   1.6 %     over 450-650 nm
   VERDICT: REASONABLE
 
-R_rs RESULT
-  Rrs(443) = 0.00276 sr^-1     Rrs(555) = 0.00888 sr^-1
-  96 water x sky pairings computed
-  pairing envelope: 46.3 % at 443 nm, 37.5 % at 555 nm
-  spread from WHICH WATER scan:  38.7 % at 443 nm (max 79.0 % over 400-900)
-  spread from WHICH SKY scan:    7.6 % at 443 nm (max 23.5 % over 400-900)
+R_rs RESULT  (angle-matched pairing, per-scan rho)
+  Rrs(443) = 0.00251 sr^-1     Rrs(555) = 0.00877 sr^-1
+  sky paired to each water by mirrored view angle, WITHIN this location and
+  within the same panel-reference block: mismatch mean 1.7 deg, worst 6.1 deg
+
+  SPREAD AT 443 nm.  Quote the sd: a min-max envelope grows with sample size,
+  so A (96 spectra) and C (12) are NOT comparable on it.
+    treatment                          envelope       sd
+    A  blind pairing, fixed rho           46.3 %    11.3 %
+    B  blind pairing, rho(theta_v)        42.7 %        -
+    C  ANGLE-MATCHED, rho(theta_v)        37.3 %     9.3 %
+
+  CONTROL: 2000 draws assigning a RANDOM sky per water at the same n=12, drawn
+  from the SAME panel block, differing from the treatment only in ignoring angle:
+  sd = 8.9 % (median). Angle matching gives 9.3 %, and 72 % of random draws
+  are at least as tight, so it is NOT a demonstrated improvement at this n.
+  Reason: these sky scans span only ~5 deg, so there is little geometry to match.
+  -> the honest spread on R_rs(443) is the sd, about 9 %, and the fall from
+     the 46 % blind envelope is mostly sample size, not physics.
+  spread from WHICH WATER scan:  33.3 % at 443 nm (max 81.9 % over 400-900)
+  spread from WHICH SKY scan:    9.3 % at 443 nm (max 35.2 % over 400-900)
   -> WATER-to-water variability dominates at 443 nm.
 
 For scale, rho alone (0.022-0.045) moves Rrs(443) by ~32 %%, so it remains the

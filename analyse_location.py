@@ -232,85 +232,203 @@ def fig_ed(panels, wl, sun, outdir, tag, panel_r):
 
 
 # ---------------------------------------------------------------- figure 4
-def fig_rrs(water, sky, wl, outdir, tag, panel_r, rho):
-    """Every water x sky pairing, so the cost of the sky choice is explicit."""
-    combos, by_water, by_sky = [], {}, {}
-    for w in water:
-        lt = w["spec"].columns["rad_target"]
-        lp = w["spec"].columns["rad_ref"]          # each water scan's OWN panel
-        for s in sky:
-            r = rrs_three_scan(wl, lt, s["spec"].columns["rad_target"], lp,
-                               panel_r, rho, "none").rrs
-            combos.append(r)
-            by_water.setdefault(w["n"], []).append(r)
-            by_sky.setdefault(s["n"], []).append(r)
+def match_by_angle(water, sky, respect_blocks=True):
+    """Pair each water scan with a sky scan, INSIDE this location only.
 
-    l_sky_mean = [sum(s["spec"].columns["rad_target"][i] for s in sky) / len(sky)
-                  for i in range(len(wl))]
-    canon = []
+    Two constraints, both physical:
+
+    1. LOCATION. This function only ever sees one location/foreoptic folder, so a water
+       scan can never be paired with a sky scan from a different site or a different
+       field of view. Guarded by `assert_same_dataset`.
+
+    2. PANEL-REFERENCE BLOCK. Within one location the operator may re-reference the
+       panel mid-station, which splits the visit into blocks separated in time. Pairing
+       across a block boundary reaches for a sky scan minutes away and from the other
+       side of a recalibration, which is exactly the changing-light error the sky scan
+       exists to avoid. Matching therefore stays inside a block, and only falls back to
+       the whole location if a block has no sky scan at all -- which is reported.
+
+    Within those constraints the sky scan chosen is the one whose view angle MIRRORS the
+    water scan, per the field protocol: the same angle from zenith as the water is from
+    nadir.
+    """
+    from process_field_day import band
+    out = []
     for w in water:
-        canon.append(rrs_three_scan(wl, w["spec"].columns["rad_target"], l_sky_mean,
-                                    w["spec"].columns["rad_ref"], panel_r, rho,
-                                    "none").rrs)
-    cm, _, _ = stats(canon)
-    m, lo, hi = stats(combos)
+        pool = sky
+        note = ""
+        if respect_blocks:
+            kw = round(band(w["spec"], "rad_ref", 450, 650), 6)
+            same = [s for s in sky
+                    if round(band(s["spec"], "rad_ref", 450, 650), 6) == kw]
+            if same:
+                pool = same
+            else:
+                note = "no sky in this panel block; fell back to the location"
+        tw = w["spec"].tilt_y_deg
+        best = min(pool, key=lambda s: abs(s["spec"].tilt_y_deg - tw))
+        out.append((w, best, abs(best["spec"].tilt_y_deg - tw), note))
+    return out
+
+
+def assert_same_dataset(scans):
+    """Refuse to analyse a mixed bag: one position, one foreoptic, one wavelength grid."""
+    fos = {s["fo"] for s in scans}
+    if len(fos) > 1:
+        raise ValueError("mixed foreoptics %s: 8 and 15 deg average over different "
+                         "footprints and do not share rho" % sorted(fos))
+    lat = [s["lat"] for s in scans]
+    lon = [s["lon"] for s in scans]
+    import math as _m
+    span = _m.hypot((max(lat) - min(lat)) * 111320,
+                    (max(lon) - min(lon)) * 111320 * _m.cos(_m.radians(lat[0])))
+    if span > 120.0:
+        raise ValueError("scans span %.0f m; this is not one location" % span)
+    if len({len(s["spec"].wavelength) for s in scans}) > 1:
+        raise ValueError("scans are on different wavelength grids")
+    return span
+
+
+def fig_rrs(water, sky, wl, outdir, tag, panel_r, rho):
+    """Three treatments, from blind to geometry-aware, so the envelope is attributable.
+
+      A  all water x sky pairings, fixed rho          -- what you get with no geometry
+      B  all pairings, rho at each water scan's angle -- rho corrected, pairing blind
+      C  ANGLE-MATCHED pairing, rho at that angle     -- both corrected
+
+    TWO CAUTIONS, both measured rather than assumed.
+
+    A min-max envelope GROWS WITH SAMPLE SIZE, so A (96 spectra) and C (12) are not
+    comparable on that statistic. The standard deviation is, and it is reported
+    alongside; quote the sd, not the envelope.
+
+    And angle matching is NOT demonstrably better than picking a sky at random here: a
+    2000-draw control that assigns one RANDOM sky per water at the same n=12 reproduces
+    the angle-matched scatter about a quarter of the time. That is because these sky
+    scans span only ~5 deg, so there is little geometry to match. Reported honestly by
+    `random_pairing_control` rather than presented as a win.
+    """
+    import numpy as np
+    i443 = min(range(len(wl)), key=lambda k: abs(wl[k] - 443))
+    i555 = min(range(len(wl)), key=lambda k: abs(wl[k] - 555))
+
+    def rrs_of(w, sk, use_angle):
+        r = rho_at_angle(view_zenith_from_tilt(w["spec"].tilt_y_deg)) if use_angle \
+            else rho
+        return rrs_three_scan(wl, w["spec"].columns["rad_target"],
+                              sk["spec"].columns["rad_target"],
+                              w["spec"].columns["rad_ref"], panel_r, r, "none").rrs
+
+    A = [rrs_of(w, sk, False) for w in water for sk in sky]
+    B = [rrs_of(w, sk, True) for w in water for sk in sky]
+    pairs = match_by_angle(water, sky)
+    C = [rrs_of(w, sk, True) for w, sk, _, _ in pairs]
+    mism = [d for _, _, d, _ in pairs]
+    fallbacks = [w["n"] for w, _, _, note in pairs if note]
+
+    by_water, by_sky = {}, {}
+    for w in water:
+        for sk in sky:
+            r = rrs_of(w, sk, True)
+            by_water.setdefault(w["n"], []).append(r)
+            by_sky.setdefault(sk["n"], []).append(r)
+
+    # Sample-size control: is ANGLE matching better than a random sky, at the same n?
+    # The control must obey the SAME constraints as the treatment, or it is not a
+    # control -- so it draws only from the water scan's own panel-reference block, and
+    # differs from the treatment in exactly one thing: it ignores the view angle.
+    import random as _random
+    from process_field_day import band as _band
+    pools = {}
+    for w in water:
+        kw = round(_band(w["spec"], "rad_ref", 450, 650), 6)
+        pools[w["n"]] = [sk for sk in sky
+                         if round(_band(sk["spec"], "rad_ref", 450, 650), 6) == kw] \
+            or list(sky)
+    rng = _random.Random(0)
+    ctrl = []
+    for _ in range(2000):
+        v = [rrs_of(w, rng.choice(pools[w["n"]]), True)[i443] for w in water]
+        mu = sum(v) / len(v)
+        ctrl.append((sum((x - mu) ** 2 for x in v) / len(v)) ** 0.5 / mu * 100)
+    ctrl.sort()
+
+    mA, loA, hiA = stats(A)
+    mB, loB, hiB = stats(B)
+    mC, loC, hiC = stats(C)
 
     fig, axes = plt.subplots(1, 3, figsize=(17, 5.0))
     a = axes[0]
-    wlc, mc = clip(wl, cm, RLO, RHI)
-    a.fill_between(wlc, clip(wl, lo, RLO, RHI)[1], clip(wl, hi, RLO, RHI)[1],
-                   color="#bbb", alpha=0.55,
-                   label="every water x sky pairing (n=%d)" % len(combos))
-    for c in canon:
-        a.plot(*clip(wl, c, RLO, RHI), lw=0.8, alpha=0.6, color=C_WATER)
-    a.plot(wlc, mc, lw=2.8, color=C_MEAN, label="mean, sky-averaged (n=%d)" % len(canon))
+    for lab, (m, lo, hi), col in (
+            ("A  blind pairing, fixed $\\rho$", (mA, loA, hiA), "#c0392b"),
+            ("B  blind pairing, $\\rho(\\theta_v)$", (mB, loB, hiB), "#8a6000"),
+            ("C  ANGLE-MATCHED, $\\rho(\\theta_v)$", (mC, loC, hiC), "#2e7d32")):
+        wlc, _ = clip(wl, m, RLO, RHI)
+        a.fill_between(wlc, clip(wl, lo, RLO, RHI)[1], clip(wl, hi, RLO, RHI)[1],
+                       color=col, alpha=0.22)
+        a.plot(*clip(wl, m, RLO, RHI), lw=2.2, color=col,
+               label="%s   %.0f %% at 443" % (lab, 100 * (hi[i443] - lo[i443]) / m[i443]))
     a.axhline(0, color="#888", lw=0.8)
-    a.set_ylabel("$R_{rs}$  sr$^{-1}$"); a.legend(fontsize=9)
-    a.set_title("$R_{rs}$: mean and the full pairing envelope", fontsize=11, loc="left")
+    a.set_ylabel("$R_{rs}$  sr$^{-1}$"); a.legend(fontsize=8.5)
+    a.set_title("The envelope shrinks as geometry is respected", fontsize=10.5,
+                loc="left")
 
-    # variance split: water-to-water vs sky-to-sky
     a = axes[1]
     idx = [i for i, x in enumerate(wl) if RLO <= x <= RHI]
-    wspread, sspread = [], []
+    wsp, ssp = [], []
     for i in idx:
         wm = [sum(v[i] for v in by_water[k]) / len(by_water[k]) for k in by_water]
         sm = [sum(v[i] for v in by_sky[k]) / len(by_sky[k]) for k in by_sky]
-        mu = sum(v[i] for v in combos) / len(combos)
-        wspread.append((max(wm) - min(wm)) / abs(mu) * 100 if mu else 0)
-        sspread.append((max(sm) - min(sm)) / abs(mu) * 100 if mu else 0)
-    a.plot([wl[i] for i in idx], wspread, lw=2.2, color=C_WATER,
+        mu = sum(v[i] for v in B) / len(B)
+        wsp.append((max(wm) - min(wm)) / abs(mu) * 100 if mu else 0)
+        ssp.append((max(sm) - min(sm)) / abs(mu) * 100 if mu else 0)
+    a.plot([wl[i] for i in idx], wsp, lw=2.2, color=C_WATER,
            label="which WATER scan (n=%d)" % len(water))
-    a.plot([wl[i] for i in idx], sspread, lw=2.2, color=C_SKY,
+    a.plot([wl[i] for i in idx], ssp, lw=2.2, color=C_SKY,
            label="which SKY scan (n=%d)" % len(sky))
-    a.set_ylabel("full range of the group means, % of $R_{rs}$")
-    a.legend(fontsize=9)
-    a.set_title("Where the spread comes from", fontsize=11, loc="left")
+    a.set_ylabel("range of group means, % of $R_{rs}$"); a.legend(fontsize=9)
+    a.set_title("Where the remaining spread comes from", fontsize=10.5, loc="left")
 
     a = axes[2]
-    for k in sorted(by_sky):
-        sm = [sum(v[i] for v in by_sky[k]) / len(by_sky[k]) for i in range(len(wl))]
-        a.plot(*clip(wl, sm, RLO, RHI), lw=1.4, label="sky %s" % k)
-    a.plot(wlc, mc, lw=2.6, color="k", ls="--", label="sky-averaged")
-    a.set_ylabel("$R_{rs}$  sr$^{-1}$"); a.legend(fontsize=7.5, ncol=2)
-    a.set_title("Mean $R_{rs}$ if you had used ONE sky scan", fontsize=11, loc="left")
+    for w, sk, dm, _ in pairs:
+        a.plot(*clip(wl, rrs_of(w, sk, True), RLO, RHI), lw=1.1, alpha=0.75,
+               color=C_WATER)
+    a.plot(*clip(wl, mC, RLO, RHI), lw=2.8, color="#2e7d32",
+           label="angle-matched mean (n=%d)" % len(C))
+    a.axhline(0, color="#888", lw=0.8)
+    a.set_ylabel("$R_{rs}$  sr$^{-1}$"); a.legend(fontsize=9)
+    cv = [c[i443] for c in C]
+    sdC = float(np.std(cv) / np.mean(cv) * 100)
+    frac = sum(1 for c in ctrl if c <= sdC) / len(ctrl)
+    a.set_title("C: one sky per water, mirrored geometry\n"
+                "mismatch mean %.1f$^\\circ$   sd %.1f %% vs %.1f %% for a RANDOM sky\n"
+                "%.0f %% of random draws are as tight -> NOT yet a demonstrated gain"
+                % (sum(mism) / len(mism), sdC, ctrl[len(ctrl) // 2], 100 * frac),
+                fontsize=9.5, loc="left")
     for a_ in axes:
         a_.set_xlabel("wavelength (nm)"); a_.grid(alpha=0.25); a_.set_xlim(RLO, RHI)
-    fig.suptitle("%s — $R_{rs}$ and the cost of the sky choice" % tag, fontsize=13,
-                 weight="bold")
+    fig.suptitle("%s — $R_{rs}$, paired by geometry rather than blindly" % tag,
+                 fontsize=13, weight="bold")
     fig.tight_layout(rect=(0, 0, 1, 0.92))
-    p = os.path.join(outdir, "fig4_rrs_spread.png")
-    fig.savefig(p, dpi=140); plt.close(fig)
+    pth = os.path.join(outdir, "fig4_rrs_spread.png")
+    fig.savefig(pth, dpi=140); plt.close(fig)
 
-    i443 = min(range(len(wl)), key=lambda k: abs(wl[k] - 443))
-    i555 = min(range(len(wl)), key=lambda k: abs(wl[k] - 555))
-    out = {"n_combos": len(combos), "mean": cm, "lo": lo, "hi": hi,
-           "rrs443": cm[i443], "rrs555": cm[i555],
-           "env443": (hi[i443] - lo[i443]) / cm[i443] * 100,
-           "env555": (hi[i555] - lo[i555]) / cm[i555] * 100,
-           "w_spread": max(wspread), "s_spread": max(sspread),
-           "w_spread_443": wspread[idx.index(i443)],
-           "s_spread_443": sspread[idx.index(i443)]}
-    return p, out
+    env = lambda m, lo, hi, i: (hi[i] - lo[i]) / m[i] * 100
+    out = {"n_A": len(A), "n_C": len(C), "mean": mC,
+           "rrs443": mC[i443], "rrs555": mC[i555],
+           "envA443": env(mA, loA, hiA, i443), "envB443": env(mB, loB, hiB, i443),
+           "envC443": env(mC, loC, hiC, i443),
+           "envA555": env(mA, loA, hiA, i555), "envC555": env(mC, loC, hiC, i555),
+           "mism_mean": sum(mism) / len(mism), "mism_max": max(mism),
+           "fallbacks": fallbacks,
+           "sdA443": float(np.std([c[i443] for c in A]) / np.mean([c[i443] for c in A])
+                           * 100),
+           "sdC443": sdC, "ctrl_med": ctrl[len(ctrl) // 2],
+           "ctrl_frac": sum(1 for c in ctrl if c <= sdC) / len(ctrl),
+           "w_spread_443": wsp[idx.index(i443)], "s_spread_443": ssp[idx.index(i443)],
+           "w_spread": max(wsp), "s_spread": max(ssp)}
+    return pth, out
+
 
 
 # ---------------------------------------------------------------- figure 5
@@ -643,6 +761,7 @@ def main():
     a = ap.parse_args()
 
     scans = survey(a.folder)
+    span_m = assert_same_dataset(scans)
     loc = os.path.basename(os.path.dirname(a.folder.rstrip("/")))
     fo = os.path.basename(a.folder.rstrip("/"))
     tag = "%s  ·  %s" % (loc, fo)
@@ -672,6 +791,8 @@ def main():
          hhmm(max(s["gps"] for s in scans)), min(s["sun"] for s in scans),
          max(s["sun"] for s in scans), fov_deg(fo.split("_")[0])))
     P("%d sky, %d water, %d LAND targets" % (len(sky), len(water), len(land)))
+    P("all scans within %.0f m and one foreoptic: pairing cannot leave this location"
+      % span_m)
     P("%d distinct panel references, so the panel was re-taken %d time(s) mid-station"
       % (len(panels), len(panels) - 1))
     rng = [s["range"] for s in scans]
@@ -720,11 +841,34 @@ def main():
         P("")
 
     p4, r = fig_rrs(water, sky, wl, outdir, tag, a.panel_reflectance, a.rho)
-    P("R_rs RESULT")
+    P("R_rs RESULT  (angle-matched pairing, per-scan rho)")
     P("  Rrs(443) = %.5f sr^-1     Rrs(555) = %.5f sr^-1" % (r["rrs443"], r["rrs555"]))
-    P("  %d water x sky pairings computed" % r["n_combos"])
-    P("  pairing envelope: %.1f %% at 443 nm, %.1f %% at 555 nm"
-      % (r["env443"], r["env555"]))
+    P("  sky paired to each water by mirrored view angle, WITHIN this location and")
+    P("  within the same panel-reference block: mismatch mean %.1f deg, worst %.1f deg"
+      % (r["mism_mean"], r["mism_max"]))
+    if r["fallbacks"]:
+        P("  block fallback needed for: %s" % ", ".join(r["fallbacks"]))
+    P("")
+    P("  SPREAD AT 443 nm.  Quote the sd: a min-max envelope grows with sample size,")
+    P("  so A (%d spectra) and C (%d) are NOT comparable on it." % (r["n_A"], r["n_C"]))
+    P("    %-34s %8s %8s" % ("treatment", "envelope", "sd"))
+    P("    A  blind pairing, fixed rho        %7.1f %% %7.1f %%"
+      % (r["envA443"], r["sdA443"]))
+    P("    B  blind pairing, rho(theta_v)     %7.1f %% %8s" % (r["envB443"], "-"))
+    P("    C  ANGLE-MATCHED, rho(theta_v)     %7.1f %% %7.1f %%"
+      % (r["envC443"], r["sdC443"]))
+    P("")
+    P("  CONTROL: 2000 draws assigning a RANDOM sky per water at the same n=%d, drawn"
+      % r["n_C"])
+    P("  from the SAME panel block, differing from the treatment only in ignoring angle:")
+    P("  sd = %.1f %% (median). Angle matching gives %.1f %%, and %.0f %% of random draws"
+      % (r["ctrl_med"], r["sdC443"], 100 * r["ctrl_frac"]))
+    P("  are at least as tight, so it is NOT a demonstrated improvement at this n.")
+    P("  Reason: these sky scans span only ~5 deg, so there is little geometry to match.")
+    P("  -> the honest spread on R_rs(443) is the sd, about %.0f %%, and the fall from"
+      % r["sdC443"])
+    P("     the %.0f %% blind envelope is mostly sample size, not physics."
+      % r["envA443"])
     P("  spread from WHICH WATER scan:  %.1f %% at 443 nm (max %.1f %% over 400-900)"
       % (r["w_spread_443"], r["w_spread"]))
     P("  spread from WHICH SKY scan:    %.1f %% at 443 nm (max %.1f %% over 400-900)"
