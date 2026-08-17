@@ -142,7 +142,7 @@ done
 | location | scans | foreoptic | steps 0–5 | GIOP |
 |---|---|---|---|---|
 | **LOC1** 66.89718 N 162.60290 W | 22 | FLENS8 (8°) | **done** | **done** |
-| **LOC2** 66.89677 N 162.57953 W | 23 | FLENS8 (8°) | **done, split into 2a/2b/2c** | LOC2a/2b pending |
+| **LOC2** 66.89677 N 162.57953 W | 23 | FLENS8 (8°) | **done, split into 2a/2b/2c** | **done (2a/2b)** |
 | LOC3 | 32 | FIBR15 (15°) **and** FLENS8 (8°) | not run | not run |
 
 **LOC2 is not one water population** — `analyse_water_scans.py` found 3 of its 12 water

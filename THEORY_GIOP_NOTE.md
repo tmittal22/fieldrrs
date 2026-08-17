@@ -178,6 +178,14 @@ Three cautions, all of which bind on real data:
    by ŝ = χ²_ν,min (Avni 1976) is the standard treatment — and on LOC1 it *still*
    collapses to one arm, which is itself the finding: the assumption sweep is a set of
    rejected models, not an uncertainty band.
+4. **χ²_ν is not comparable across stations/datasets.** χ²_ν = Σ(Δ/σ)² / ν, and σ here is
+   each station's own *measured* per-band shape uncertainty from its amplitude-normalised
+   mean — a property of how tightly that station's replicate scans agree, not of the
+   model. Two stations at the same location (LOC2a, LOC2a's own sub-population LOC2b)
+   with essentially the same RMS misfit (8–10 % at both) can differ in χ²_ν by two orders
+   of magnitude purely because one has 3 scans agreeing to 0.16 % and the other has 9
+   agreeing to 0.77 % (`LOC2b_GIOP_FINDINGS.md` §A1 works the arithmetic). **RMS misfit
+   is the quantity to compare across stations; χ²_ν only ranks arms within one.**
 
 ### 4.1 "Free" is not assumption-free — the OC4 seed survives it
 

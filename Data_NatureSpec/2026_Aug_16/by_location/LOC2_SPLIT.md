@@ -66,6 +66,29 @@ the final products. LOC1 sits below both LOC2 sub-stations in the blue and has a
 different balance between its 570 nm and 700 nm peaks. Headline R_rs(555): LOC1 0.00865,
 LOC2a 0.01081, LOC2b 0.01068 sr⁻¹.
 
+## GIOP
+
+Both LOC2a and LOC2b have been run through the full GIOP pipeline (`giop0`–`giop11`, same
+figure set as LOC1), with `--glint nir_similarity` applied at LOC2a (see
+`LOC2a_.../analysis/water_scans/SCAN_00035_GLINT.md`). Findings in
+`LOC2a_.../analysis/GIOP/LOC2a_GIOP_FINDINGS.md` and
+`LOC2b_.../analysis/GIOP/LOC2b_GIOP_FINDINGS.md`; cross-station figure
+`COMPARISON/giop_cross_station.png`.
+
+**Headline**: a_dg(443) and b_bp(443) are stable and quotable at LOC1 and LOC2a (agree to
+≤4 % between the free and maximum-freedom configurations). At LOC2b (n=3) a_dg is
+**not** stable (0.33 vs 0.49 m⁻¹ depending on configuration) — a real consequence of
+weaker statistical constraint at n=3, not a bug (the profile solver's nesting property
+still holds there). b_bp is higher at LOC2b than LOC2a in both configurations, the
+direction more disturbed sediment predicts — suggestive corroboration of the R_rs-level
+finding above, not confirmation of it; the R_rs finding does not depend on GIOP.
+
+**A general methodological finding, not specific to this dataset**: χ²_ν is not
+comparable across stations with different measured shape uncertainty (LOC2b's χ²_ν
+reaches 16 000+ purely because its 3 scans agree far more tightly than LOC1's 12 do, not
+because the model fits worse — RMS misfit is ~9.7 % at LOC2b against LOC1's 10.9 %, i.e.
+comparable). Recorded in `THEORY_GIOP_NOTE.md` §4 point 4.
+
 ## Reproduce
 
 ```bash
