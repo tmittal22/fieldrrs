@@ -1,7 +1,9 @@
 # Processing a field day, end to end
 
 Every script, in order, with the exact command, what it writes, and what to look at.
-Worked on the 2026-08-16 Kotzebue day (22 scans at LOC1, 23 at LOC2, 32 at LOC3).
+Worked on the 2026-08-16 Kotzebue day (22 scans at LOC1, 23 at LOC2, 32 at LOC3), the
+only field day this pipeline has processed so far — every path below is that day's, swap
+in a new date's folder name and everything else is unchanged.
 
 `fieldrrs/` itself is standard-library only. **The scripts in this directory are not** —
 they need numpy, scipy, matplotlib, plotly, and (for GIOP) the sibling
@@ -70,22 +72,60 @@ Six independent checks, all of which must pass:
 | conservation | L_w ≤ L_t, no negative radiances | pass |
 
 **Do not skip this.** The GIOP stage cannot tell a processing blunder from unusual water.
+The pass/fail thresholds scale with the station's own scan count (`verify_field_calcs.py`
+V2/V6), not a hardcoded number, so this is safe to run on a station with 2 scans or 30.
 
-## 4. The per-location analysis — 12 figures
+## 4. The per-location analysis — 13–14 figures
 
 ```bash
 python analyse_location.py Data_NatureSpec/2026_Aug_16/by_location/LOC1_*/FLENS8_FOV08
 ```
 
-Writes `analysis/` with `REPORT.txt`, `FINAL_Rrs.csv` and figures 1–12. Each figure and
-what it settles is indexed in `analysis/README.md`, written by the same run.
+Writes `analysis/` with `REPORT.txt`, `FINAL_Rrs.csv` and figures 1–13 (fig7,
+land-targets, only appears if the station has scans classified `land` — LOC1 has 2,
+LOC2/LOC3 have none). Each figure and what it settles is indexed in `analysis/README.md`,
+written by the same run — never hand-edit that index, it goes stale within a day (found
+this session: an early hand-written `GIOP/README.md` referenced a since-renamed figure
+and quoted withdrawn numbers within the same session it was written; see §6).
 
 Pairing is **angle-matched and location-locked**: each water scan is paired to the sky
 scan whose view geometry mirrors it, drawn only from the same location *and* the same
 panel-reference block. `match_by_angle(..., respect_blocks=True)`; `assert_same_dataset()`
 raises rather than silently pairing across stations.
 
-## 5. Interactive version
+At n<4 water scans, `fig_sensitivity` (angle/range confound control) and at n<3,
+`fig_variability` (PC1 shape/amplitude split) write an explicit "insufficient data"
+placeholder instead of crashing or silently omitting the figure — this matters for small
+split-off sub-populations like LOC3's murky pair (n=2).
+
+## 5. Is this really one water population?
+
+```bash
+python analyse_water_scans.py Data_NatureSpec/2026_Aug_16/by_location/LOC1_*/FLENS8_FOV08
+```
+
+Writes `analysis/water_scans/`: per-scan shape-angle clustering (is every water scan
+close to the group, or is one/some a different water body?), a NIR-similarity
+glint-collapse test per deviant scan (Ruddick et al. 2006 — does a glint correction pull
+it back into the group, or is it genuinely different water?), a contact sheet of the
+photos, and a verdict table (`clean` / `glint (correctable)` / `deviant, NOT glint`).
+
+**Run this at every station, not just ones you already suspect are mixed** — it is what
+caught LOC2's disturbed-water sub-population (§below) and LOC1's own two
+glint-affected scans (00005, 00007, both `glint (correctable)`, found only when this
+tool was finally run there — see the LOC1 row of the status table). Needs ≥3 water
+scans; below that (LOC3's murky pair, n=2) it writes an explanation to
+`water_scans/REPORT.txt` instead of silently producing nothing, since clustering needs
+something to cluster against.
+
+**If it finds a real second population**, split manually: make a new
+`by_location/LOC<n><letter>_.../<FOREOPTIC>_FOV<nn>/` folder and symlink (not copy) the
+shared sky/panel scans and the deviant water scans into it, so there is exactly one copy
+of every raw `.sed`/`.jpg` on disk (see LOC3-FIBR15's murky-pair split for the pattern).
+Then re-run steps 3–8 on the new sub-station independently. `LOC2_SPLIT.md` and
+`LOC3_BOTTOM_CAVEAT.md` are the two worked examples.
+
+## 6. Interactive version
 
 ```bash
 python make_interactive_report.py Data_NatureSpec/2026_Aug_16/by_location/LOC1_*/FLENS8_FOV08
@@ -94,31 +134,64 @@ python make_interactive_report.py Data_NatureSpec/2026_Aug_16/by_location/LOC1_*
 `analysis/REPORT.html`, 8 plotly panels, zoomable, self-contained (no CDN), openable from
 Dropbox on any machine.
 
-## 6. GIOP inversion
+## 7. GIOP inversion
 
 ```bash
 python make_giop_figures.py Data_NatureSpec/2026_Aug_16/by_location/LOC1_*/FLENS8_FOV08
 ```
 
-Writes `analysis/GIOP/` — 10 figures, `giop_per_scan.csv` (the 12 individual fits) and
-`giop_assumption_arms.csv` (every arm of the assumption sweep, ranked by χ², with its
-weight and whether it is admissible). Indexed in `analysis/GIOP/README.md`; the physics
-and the caveats are in `THEORY_GIOP_NOTE.md`, the verdict in `LOC1_GIOP_FINDINGS.md`.
+Writes `analysis/GIOP/` — 12 figures (`giop0`–`giop11`), `giop_per_scan.csv` (every
+individual angle-matched fit) and `giop_assumption_arms.csv` (every arm of the assumption
+sweep, ranked by χ², with its weight and whether it is admissible).
+`analysis/GIOP/README.md` is **auto-generated fresh on every run**
+(`make_giop_figures.write_giop_index`) — it pulls the live M_φ/a_dg/b_bp/χ²_ν/RMS numbers
+straight from the run and searches upward from the output folder for a
+`<LOC>_GIOP_FINDINGS.md`, so it can never point at a stale number the way a hand-written
+index can. The physics and general caveats are in `THEORY_GIOP_NOTE.md`; the station-
+specific verdict, written once per location by hand (not auto-generated, since it is
+interpretation, not a number dump) is `LOC1_GIOP_FINDINGS.md` /
+`LOC2a_GIOP_FINDINGS.md` / `LOC2b_GIOP_FINDINGS.md` / `LOC3_GIOP_FINDINGS.md`.
 
-Runs on the **amplitude-normalised mean** from step 4 and on each of the 12 angle-matched
-pairs separately, hyperspectral over 400–700 nm.
+Runs on the **amplitude-normalised mean** from step 4 and on each angle-matched pair
+separately, hyperspectral over 400–700 nm — GIOP's own Bricaud a*_φ table does not extend
+past 700 nm, so it never sees anything redder than that (relevant at LOC3, §below).
 
-> ⚠ Read `LOC1_GIOP_FINDINGS.md` Correction 2 before quoting any concentration. The best
-> arm of 24 has χ²_ν = 18 against a measured 1.9 % band uncertainty. Nothing in the GIOP
-> family fits this water well.
+> ⚠ Read the relevant `LOC*_GIOP_FINDINGS.md` before quoting any concentration.
+> **Never quote M_φ / chlorophyll** — it moves 5–7× across equally-valid fit
+> configurations at every station (`THEORY_GIOP_NOTE.md` §5, a Case-1 model on Case-2
+> water). **Never compare χ²_ν across stations** — it scales with each station's own
+> measured σ, not fit quality; RMS misfit is the comparable number.
 
-## 7. Tests
+## 8. Every individual spectrum, and a site-level summary
 
 ```bash
-python tests/test_fieldrrs.py     # 58, standard library only, the package itself
-python -m pytest tests/test_field_day.py -q    # the field-day scripts
-cd ../giop_python && python -m pytest -q       # 140, the inversion
+python make_all_spectra_figs.py Data_NatureSpec/2026_Aug_16/by_location/LOC1_*/FLENS8_FOV08   # one sub-case: fig14
+python make_all_spectra_figs.py --site LOC2                                                    # a site: all sub-cases together
+python make_all_spectra_figs.py --site LOC3
 ```
+
+The first form writes `analysis/fig14_all_spectra.png` — every individual water scan on
+disk for that sub-case, full 400–900 nm range, real (non-normalised) amplitude, with any
+scan `FINAL_Rrs.csv` excluded shown dotted grey and labelled. This is deliberately
+independent of `--exclude-water`: it shows everything, including what was cut and why
+(read back from the station's own `REPORT.txt`), rather than only the clean survivors.
+
+The `--site` form (LOC2 or LOC3 only — the two sites with more than one sub-case) writes
+`by_location/COMPARISON/<SITE>_site_summary.png` (one panel per sub-case, every scan) and
+`<SITE>_site_means_overlay.png` (just the sub-case means, one axis) — the site paths are
+hardcoded in the `SITES` dict at the top of the script; add a new site there rather than
+generalising the CLI, since each site's sub-case list is a one-off decision anyway.
+
+## 9. Tests
+
+```bash
+python tests/test_fieldrrs.py                    # 111, standard library only, the package itself
+python -m pytest tests/test_field_day.py -q       # 26, the field-day scripts
+cd ../giop_python && python -m pytest -q          # 140 passed + 1 skipped, the inversion
+```
+
+The GIOP suite's one skip is `test_essd2023_raman` when `$ESSD_NC_DIR`'s HydroLight
+`.nc` files aren't staged locally — not a field-day-specific test.
 
 ---
 
@@ -130,20 +203,38 @@ python survey_field_data.py $D
 python organize_by_location.py $D
 python make_location_map.py $D
 for L in $D/by_location/LOC*/*_FOV*; do
-    python verify_field_calcs.py    "$L"
-    python analyse_location.py      "$L"
+    python verify_field_calcs.py      "$L"
+    python analyse_location.py        "$L"
+    python analyse_water_scans.py     "$L"
     python make_interactive_report.py "$L"
-    python make_giop_figures.py     "$L"
+    python make_giop_figures.py       "$L"
+    python make_all_spectra_figs.py   "$L"
 done
+python make_all_spectra_figs.py --site LOC2
+python make_all_spectra_figs.py --site LOC3
 ```
+
+This loop is written for a station laid out from the start — it does **not** perform a
+split. If step 5 (or `--site`'s side-by-side figure) turns up a second population inside
+one of the `LOC*_FOV*` folders the loop found, stop, do the manual split described in §5,
+then re-run the loop (or just steps 3–9) on the new sub-station folders it creates.
 
 ## Status, 2026-08-17
 
-| location | scans | foreoptic | steps 0–5 | GIOP |
-|---|---|---|---|---|
-| **LOC1** 66.89718 N 162.60290 W | 22 | FLENS8 (8°) | **done** | **done** |
-| **LOC2** 66.89677 N 162.57953 W | 23 | FLENS8 (8°) | **done, split into 2a/2b/2c** | **done (2a/2b)** |
-| LOC3 | 32 | FIBR15 (15°) **and** FLENS8 (8°) | not run | not run |
+| location | scans | foreoptic | steps 0–6 | GIOP | notes |
+|---|---|---|---|---|---|
+| **LOC1** 66.89718 N 162.60290 W | 22 (12 water) | FLENS8 (8°) | **done** | **done** | one population; step 5 (run retroactively this session) flags 00005/00007 as glint-correctable — **not yet applied to `FINAL_Rrs.csv`, open item, see `PAPER_READINESS.md`** |
+| **LOC2a** (main) 66.89677 N 162.57953 W | 9 water | FLENS8 (8°) | **done** | **done** | 00035 glint-corrected via `--glint nir_similarity`, verified to collapse back into the group |
+| **LOC2b** (disturbed) | 3 water | FLENS8 (8°) | **done** | **done** | real, not artefact, n=3 — report with the weaker-n caveat |
+| **LOC2c** (algae mat) | 2 | FLENS8 (8°) | **n/a — reflectance, not R_rs** | n/a | one figure + REPORT.txt by design (`analyse_algae_mat.py`); not the 13-figure R_rs pipeline, see its own module docstring for why |
+| **LOC3-FIBR15 (main)** 66.89235 N 162.59149 W | 3 water | FIBR15 (15°) | **done** | **done** | clean open water |
+| **LOC3-FIBR15 (murky)** | 2 water | FIBR15 (15°) | **done** | **done** | 00058/00059, high-sediment pair, split out same pattern as LOC2b; step 5 structurally skips at n=2 (writes why) |
+| **LOC3-FLENS8** | 4 water | FLENS8 (8°) | **done** | **done** | see `LOC3_BOTTOM_CAVEAT.md` before quoting anything — every LOC3 sub-station's composition numbers are conditional on optical depth, which is unmeasured |
+
+`by_location/LOC2_66.89677N_162.57953W/` (the pre-split, unified copy) is **superseded**
+by 2a/2b/2c above — do not read from it or recreate it, the split is permanent. (Queued
+for removal as a duplicate; if it is still present, treat 2a/2b/2c as authoritative
+regardless.)
 
 **LOC2 is not one water population** — `analyse_water_scans.py` found 3 of its 12 water
 scans (00027–29) are physically different water (disturbed sediment, settling over
@@ -156,7 +247,27 @@ individual glint disposition in `LOC2a_.../analysis/water_scans/SCAN_00035_GLINT
 and the LOC1/2a/2b/2c comparison in
 `Data_NatureSpec/2026_Aug_16/by_location/COMPARISON/loc1_loc2abc_overplot.png`.
 
-LOC3 is the controlled FOV comparison — same water, two foreoptics — and is the only
-place in the dataset where the footprint question can be answered properly. At LOC1 range
-took just 3 values and correlates with time at r = 0.92, so footprint and time are
-confounded there and neither can be separated.
+**LOC3-FIBR15 is not one water population either** — the same tool found 00058/00059
+visibly murkier (elevated GIOP `b_bp`, a failed glint-collapse, real spectral-angle
+separation from the other 3 FIBR15 water scans) and split them into their own
+`FIBR15_FOV15_murky/` station, symlinked back to the shared raw scans rather than copied.
+
+LOC3 is also the controlled FOV comparison — same water, two foreoptics — and was meant
+to be the one place in the dataset where the footprint question could be answered
+properly. It could not: range differed between foreoptics and they were used 23 minutes
+apart, both confounds independent of FOV. At LOC1 range took just 3 values and correlates
+with time at r = 0.92, so footprint and time are confounded there too, for a different
+reason. See `LOC3_FOOTPRINT_COMPARISON.md` for what a real test would need.
+
+## Where the cross-station and synthesis results live
+
+Everything above is per-station. Once every station in a field day is done, these pull
+it together — all written this session, all cite live numbers back to a specific run:
+
+| doc | question it answers |
+|---|---|
+| `Data_NatureSpec/<day>/GLOBAL_COMPARISON.md` | R_rs and GIOP composition across every station, one table |
+| `RHO_METHODOLOGY_REVIEW.md` | how to get a better ρ than the flat Mobley (1999) default — recovers real ASOS wind speed after the fact |
+| `SKY_CHOICE_SYNTHESIS.md` | does the sky-scan choice matter (answer: no, at every station, for a stated geometric reason) |
+| `LOC3_FOOTPRINT_COMPARISON.md` | why the FOV/footprint question could not be answered cleanly this field day |
+| `PAPER_READINESS.md` | what is quotable now, what is conditional, what is still open, ranked by value per unit of future field effort |

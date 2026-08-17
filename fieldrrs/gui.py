@@ -21,6 +21,7 @@ from .rrs import (
     average_results,
     cross_calibration_factor,
     rho_advice,
+    rho_for_water_scan,
     rrs_from_sed,
     rrs_from_separate_ed,
 )
@@ -139,9 +140,18 @@ class App(tk.Tk):
         tk.Button(g, text="check rho vs wind", font=("Segoe UI", 9),
                   command=self.check_rho).grid(row=3, column=0, columnspan=2,
                                                sticky="ew", pady=2)
+        self.auto_rho_angle = tk.BooleanVar(value=False)
+        ttk.Checkbutton(g, text="auto-scale rho per scan, from its own tilt",
+                        variable=self.auto_rho_angle).grid(
+                            row=4, column=0, columnspan=2, sticky="w", pady=2)
+        ttk.Label(g, text="(each water scan's OWN angle, not one flat rho for all -- "
+                          "see rho_at_angle. Off by default: matches every result "
+                          "before this option existed.)",
+                  font=("Segoe UI", 8), foreground="#444", wraplength=230).grid(
+                      row=5, column=0, columnspan=2, sticky="w")
         self.residual = self._combo(
-            g, "Residual glint", ["none", "nir_zero", "nir_similarity"], 4)
-        self.source = self._combo(g, "Use columns", ["radiance", "reflectance"], 5)
+            g, "Residual glint", ["none", "nir_zero", "nir_similarity"], 6)
+        self.source = self._combo(g, "Use columns", ["radiance", "reflectance"], 7)
 
         # --- geometry + where is the sun
         ttk.Label(left, text="Geometry  (defaults = Mobley 1999)",
@@ -522,10 +532,14 @@ class App(tk.Tk):
                 cal = self._cross_calibrate(ed_scan, panel, waters[0], pr)
 
             for w in waters:
+                rho_w, rho_note = rho_for_water_scan(
+                    w.tilt_y_deg, rho, self.auto_rho_angle.get(), w.name)
+                if rho_note:
+                    self.say("   " + rho_note)
                 if ed_scan is not None:
-                    res = self._rrs_with_measured_ed(w, sky, ed_scan, rho, resid, cal)
+                    res = self._rrs_with_measured_ed(w, sky, ed_scan, rho_w, resid, cal)
                 else:
-                    res = rrs_from_sed(w, sky, panel, panel_reflectance=pr, rho=rho,
+                    res = rrs_from_sed(w, sky, panel, panel_reflectance=pr, rho=rho_w,
                                        residual=resid, source=src)
                 res.meta.update(geom)
                 res.meta["panel_reflectance"] = pr

@@ -1,0 +1,32 @@
+==============================================================================
+PER-SCAN WATER QC  ·  LOC1_66.89718N_162.60290W  ·  FLENS8_FOV08
+==============================================================================
+12 water, 8 sky. Nothing is averaged until the scans are shown to be one
+population, because a 'spread' over different targets is not an uncertainty.
+
+IS IT ONE POPULATION?
+  main group: 10 scans, internal shape spread 1.89 deg
+  deviant   : 00005, 00007
+
+THE COLLAPSE TEST -- glint is additive, so a NIR correction must remove it
+  method              main spread 00005   00007
+  none                      3.36     2.74     2.85
+  nir_zero                  3.96     2.46     3.25
+  nir_similarity            3.21     2.28     2.40
+
+VERDICT PER SCAN
+  scan    sky    theta     Rrs555  700/675  412/555   NIRrat      ang  verdict
+  00001   00000    43.2   0.00881     1.21    0.179     1.78     1.63  clean
+  00005   00000    41.6   0.00712     1.23    0.218     1.73     2.74  glint (correctable)
+  00006   00010    47.3   0.00932     1.29    0.170     1.68     2.66  clean
+  00007   00009    46.1   0.00879     1.29    0.171     1.69     2.85  glint (correctable)
+  00008   00000    42.9   0.00709     1.24    0.189     1.78     1.96  clean
+  00011   00000    44.9   0.00865     1.18    0.173     2.08     1.35  clean
+  00012   00000    42.0   0.00790     1.16    0.204     1.98     2.03  clean
+  00013   00010    47.5   0.00926     1.18    0.132     2.06     1.82  clean
+  00016   00009    46.3   0.00963     1.10    0.153     2.07     1.41  clean
+  00017   00002    45.0   0.00991     1.11    0.171     2.04     1.42  clean
+  00018   00009    46.4   0.01021     1.11    0.167     2.14     1.45  clean
+  00019   00000    39.5   0.00897     1.13    0.177     2.03     1.35  clean
+
+Ruddick et al. (2006) NIR similarity ratio for pure-water residual: 1.912

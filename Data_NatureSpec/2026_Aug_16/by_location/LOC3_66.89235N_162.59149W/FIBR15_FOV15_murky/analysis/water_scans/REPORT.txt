@@ -1,0 +1,7 @@
+LOC3_66.89235N_162.59149W  ·  FIBR15_FOV15_murky
+
+SKIPPED -- need >=3 water and >=1 sky scan; got 2/3
+
+This tool's shape-angle clustering and glint-collapse test need at least 3 water scans to distinguish 'one deviant scan' from 'the population itself'; below that there is nothing to cluster against. This is not a processing failure -- it is a structural limit of the method at this n, the same reason analyse_location.py's fig_sensitivity/fig_variability skip below n=4/n=3 (see their own docstrings).
+
+Consequence: this sub-station's homogeneity does NOT rest on this tool. It rests on whatever established it as its own population in the first place (spectral-angle distance from the sibling group it was split from, and/or visual/field evidence) -- check the station's own split-rationale document, not this file.

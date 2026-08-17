@@ -154,6 +154,32 @@ def view_zenith_from_tilt(tilt_y_deg):
     return abs(float(tilt_y_deg))
 
 
+def rho_for_water_scan(tilt_y_deg, rho_flat, auto=False, scan_name=""):
+    """Decide which rho a single water scan should use: flat, or its own tilt.
+
+    Pulled out as a pure function (rather than left inline in the GUI) so it is
+    testable without a display and reusable outside Tk -- the same reason every other
+    piece of physics in this module is a free function, not a widget method.
+
+    ``auto=False`` (or a missing ``tilt_y_deg``) returns ``rho_flat`` unchanged, with a
+    note in the second case explaining why. ``auto=True`` with a real tilt scales
+    ``rho_flat`` to this scan's own angle via :func:`rho_at_angle`, anchored on
+    ``rho_flat`` as the 40-deg reference -- so it adjusts a manually-set rho to this
+    scan's geometry rather than silently overriding it with Mobley's default.
+
+    Returns ``(rho_value, note_or_None)``.
+    """
+    if not auto:
+        return rho_flat, None
+    if tilt_y_deg is None:
+        return rho_flat, ("%s has no logged tilt; using the flat rho=%.4f unchanged "
+                          "for this scan." % (scan_name, rho_flat))
+    vz = view_zenith_from_tilt(tilt_y_deg)
+    rho_w = rho_at_angle(vz, rho_ref=rho_flat)
+    return rho_w, ("%s: tilt %.1f deg -> rho=%.4f (flat was %.4f)"
+                   % (scan_name, vz, rho_w, rho_flat))
+
+
 def scaled_mean(spectra, iterations=25, tol=1e-12, weight=None):
     """Iterative amplitude-normalised mean: a clean SHAPE plus per-scan amplitudes.
 

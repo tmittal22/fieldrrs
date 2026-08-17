@@ -316,7 +316,24 @@ def main():
     water = sorted([x for x in scans if x["role"] == "water"], key=lambda x: x["n"])
     names = [w["n"] for w in water]
     if len(water) < 3 or not sky:
-        print("need >=3 water and >=1 sky scan; got %d/%d" % (len(water), len(sky)))
+        msg = ("need >=3 water and >=1 sky scan; got %d/%d" % (len(water), len(sky)))
+        print(msg)
+        with open(os.path.join(outdir, "REPORT.txt"), "w") as fh:
+            fh.write("%s\n\nSKIPPED -- %s\n\n"
+                     "This tool's shape-angle clustering and glint-collapse test need "
+                     "at least 3 water scans to distinguish 'one deviant scan' from "
+                     "'the population itself'; below that there is nothing to cluster "
+                     "against. This is not a processing failure -- it is a structural "
+                     "limit of the method at this n, the same reason "
+                     "analyse_location.py's fig_sensitivity/fig_variability skip below "
+                     "n=4/n=3 (see their own docstrings).\n\n"
+                     "Consequence: this sub-station's homogeneity does NOT rest on this "
+                     "tool. It rests on whatever established it as its own population in "
+                     "the first place (spectral-angle distance from the sibling group it "
+                     "was split from, and/or visual/field evidence) -- check the "
+                     "station's own split-rationale document, not this file.\n"
+                     % (tag, msg))
+        print("wrote %s/REPORT.txt (skip reason)" % outdir)
         return
 
     R = build_rrs(water, sky, wl, a.panel_reflectance, "none")

@@ -98,6 +98,24 @@ LOC1/LOC2.** The murky pair's b_bp elevation (§1b-style corroboration, `LOC3_GI
 §A1) is the one LOC3 GIOP finding least affected by this, since it is corroborated by two
 methods that do not depend on optical-depth assumptions at all.
 
+### 2d0. LOC1 has the same glint defect LOC2a had — found this session, NOT yet fixed
+`analyse_water_scans.py` had never been run at LOC1 (it postdates LOC1's original
+processing); running it retroactively for this completeness pass found 00005 and 00007
+(2 of 12 water scans) verdict `glint (correctable)` — mean shape-angle deviation from the
+group drops 2.74°/2.85° → 2.28°/2.40° under `--glint nir_similarity`, the same test and
+the same correction already trusted and applied at LOC2a's scan 00035. **Unlike 00035,
+this has NOT been applied to `FINAL_Rrs.csv`** — LOC1 was held bitwise-fixed all session
+as the regression anchor proving other changes weren't silently touching it, and flipping
+its own default is a step beyond that, not a natural extension of it: LOC1's numbers
+appear as "the" reference value throughout every doc in this dataset (§1b's table,
+`GLOBAL_COMPARISON.md`, both GIOP findings docs that compare against it), so correcting
+it changes a headline number others are already built on, not just one station's own
+figure. Recommend applying the same `--glint nir_similarity` fix used at LOC2a (the
+method is already validated, and leaving a known-correctable defect in the reference
+station while having fixed the identical defect at LOC2a is the inconsistent outcome) —
+but this is a call worth the user making explicitly rather than silently inheriting from
+the 00035 precedent, since it moves the one number every other station is compared to.
+
 ### 2d. The planned FOV/footprint test did not resolve
 LOC3 was meant to isolate footprint size (both foreoptics, "same water"). It could not:
 range differed between foreoptics, the two were used 23 minutes apart, and 2c applies to
@@ -110,6 +128,11 @@ dataset does.
 
 ## 3. Open items, ranked by value per unit of future field effort
 
+0. **Decide on LOC1's 00005/00007 glint correction (§2d0).** Zero field effort — this is
+   a re-processing decision, not a data-collection one, so it belongs ahead of the
+   field-effort-ranked list below rather than in it. The fix is already validated
+   (identical to LOC2a's 00035); the only reason it isn't applied is that the call — the
+   dataset's reference numbers moving — was left for the user rather than made silently.
 1. **A depth measurement at LOC3.** Cheapest of everything below (a weighted line), and
    the only thing that converts §2c from a caveat into a resolved question.
 2. **Wind speed, recorded live, at any future site not near an ASOS station.** This

@@ -24,6 +24,7 @@ from fieldrrs import (  # noqa: E402
     view_zenith_from_tilt,
     residual_correction,
     rho_advice,
+    rho_for_water_scan,
     rrs_from_sed,
     rrs_from_separate_ed,
     rrs_three_scan,
@@ -1126,6 +1127,47 @@ class TestAngleDependentRho(unittest.TestCase):
         self.assertAlmostEqual(right, wrong, places=12)   # 45 is the fixed point
         t2 = 40.0
         self.assertLess(rho_at_angle(view_zenith_from_tilt(t2)), rho_at_angle(90.0 - t2))
+
+
+class TestRhoForWaterScan(unittest.TestCase):
+    """The GUI's opt-in per-scan angle correction -- pulled out as a pure function so
+    it is testable without a display. See its docstring for why it exists: the offline
+    pipeline's `analyse_location.py` angle-matches rho per scan (fig8, LOC1: 11.1% ->
+    8.6% scatter); the GUI used one flat rho for a whole batch until this was added."""
+
+    def test_auto_false_never_touches_rho_even_with_a_real_tilt(self):
+        r, note = rho_for_water_scan(45.0, 0.028, auto=False)
+        self.assertEqual(r, 0.028)
+        self.assertIsNone(note)
+
+    def test_default_is_off(self):
+        """The default must be False so every result before this option existed is
+        unchanged unless explicitly opted in -- the same precedent as `--glint`."""
+        import inspect
+        self.assertFalse(inspect.signature(rho_for_water_scan).parameters["auto"].default)
+
+    def test_auto_true_no_tilt_falls_back_to_flat_with_an_explanation(self):
+        r, note = rho_for_water_scan(None, 0.028, auto=True, scan_name="00099")
+        self.assertEqual(r, 0.028)
+        self.assertIn("00099", note)
+        self.assertIn("no logged tilt", note)
+
+    def test_auto_true_with_tilt_matches_rho_at_angle_exactly(self):
+        r, note = rho_for_water_scan(45.0, 0.028, auto=True, scan_name="00001")
+        expected = rho_at_angle(view_zenith_from_tilt(45.0), rho_ref=0.028)
+        self.assertEqual(r, expected)
+        self.assertNotEqual(r, 0.028)
+        self.assertIn("00001", note)
+
+    def test_anchored_on_the_flat_entry_not_hardcoded_to_mobley(self):
+        """A manually adjusted rho (e.g. from `rho_advice` under high wind) must be the
+        40-deg reference the per-scan value scales from, not silently discarded in
+        favour of RHO_MOBLEY1999 -- checking the box scales an operator's own choice,
+        it does not override it."""
+        adjusted = 0.045
+        r, _ = rho_for_water_scan(45.0, adjusted, auto=True)
+        self.assertNotAlmostEqual(r, rho_at_angle(view_zenith_from_tilt(45.0)))
+        self.assertAlmostEqual(r, rho_at_angle(view_zenith_from_tilt(45.0), rho_ref=adjusted))
 
 
 if __name__ == "__main__":
