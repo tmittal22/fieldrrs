@@ -342,6 +342,8 @@ command, what it writes, and what to look at.
 | `make_interactive_report.py` | the same as zoomable plotly, `REPORT.html` |
 | `make_giop_figures.py` | the GIOP inversion of that spectrum, 12 figures + 2 CSVs |
 | `make_all_spectra_figs.py` | every individual scan's spectrum (not just the mean), one figure per station plus a cross-sub-case site summary |
+| `make_highlights.py` | symlinks the headline figures (per station + day-wide) into `highlights/`, for a quick skim or a slide deck — never a second copy to go stale |
+| `make_slide_deck.py` | a `.pptx` results deck built from `highlights/` — map, method, per-station, global comparison |
 | `analysis_solar_window.py` | the 30–60° solar window, computed rather than adopted |
 | `analyse_algae_mat.py` | opaque-target reflectance for a floating vegetation/algae target — a different physical quantity from R_rs |
 | `make_field_card.py`, `make_theory_pdf.py` | the printable field card and the theory PDF |

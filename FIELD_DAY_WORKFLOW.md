@@ -195,10 +195,35 @@ The `--site` form (LOC2 or LOC3 only — the two sites with more than one sub-ca
 hardcoded in the `SITES` dict at the top of the script; add a new site there rather than
 generalising the CLI, since each site's sub-case list is a one-off decision anyway.
 
-## 9. Tests
+## 9. Curated highlights and the results slide deck
 
 ```bash
-python tests/test_fieldrrs.py                    # 111, standard library only, the package itself
+python make_highlights.py Data_NatureSpec/2026_Aug_16
+python make_slide_deck.py Data_NatureSpec/2026_Aug_16 --out Data_NatureSpec/2026_Aug_16/RESULTS.pptx
+```
+
+`make_highlights.py` adds `analysis/highlights/` per station (6 headline figures,
+symlinked not copied — nothing here is ever a second copy that can go stale) and a
+day-level `highlights/` (the map, cross-station comparison figures, and one field photo
+per distinct target type). `make_slide_deck.py` builds a 14-slide `.pptx` from that
+curated material — map, method (ρ correction, shape-consistent averaging, a GIOP
+good/bad comparison), one slide per station, global comparison, open items.
+
+**Both have hand-curated, day-specific lists at the top of the script** (which stations,
+which comparison figures exist yet, which photo illustrates which target type, which
+two stations make the best good/bad GIOP contrast) — same reason `make_all_spectra_figs.py`'s
+`SITES` dict above is hand-edited rather than auto-discovered: deciding what belongs in a
+5-minute skim is an editorial call, not something to infer from folder names. **For a new
+field day, these need updating before running**: `make_highlights.py`'s
+`R_RS_STATIONS`/`FIELD_PHOTOS`/`DAY_COMPARISON` lists, and `make_slide_deck.py`'s
+`site_defs` and the per-slide station paths. Running them unedited against a new day's
+folder will silently skip everything (each script prints `! missing, skipped: <path>` per
+entry rather than failing, so check the output, not just that it ran).
+
+## 10. Tests
+
+```bash
+python tests/test_fieldrrs.py                    # 116, standard library only, the package itself
 python -m pytest tests/test_field_day.py -q       # 26, the field-day scripts
 cd ../giop_python && python -m pytest -q          # 140 passed + 1 skipped, the inversion
 ```
@@ -214,7 +239,7 @@ The GIOP suite's one skip is `test_essd2023_raman` when `$ESSD_NC_DIR`'s HydroLi
 D=Data_NatureSpec/2026_Aug_16
 python survey_field_data.py $D
 python organize_by_location.py $D
-python make_location_map.py $D
+python make_location_map.py $D --place "Kotzebue, Alaska"
 for L in $D/by_location/LOC*/*_FOV*; do
     python verify_field_calcs.py      "$L"
     python analyse_location.py        "$L"
@@ -230,7 +255,12 @@ python make_all_spectra_figs.py --site LOC3
 This loop is written for a station laid out from the start — it does **not** perform a
 split. If step 5 (or `--site`'s side-by-side figure) turns up a second population inside
 one of the `LOC*_FOV*` folders the loop found, stop, do the manual split described in §5,
-then re-run the loop (or just steps 3–9) on the new sub-station folders it creates.
+then re-run the loop (or just steps 3–8) on the new sub-station folders it creates.
+
+**Step 9 (highlights + slide deck) is deliberately not in this loop** — both scripts need
+their hand-curated lists updated for the new day first (§9 above), so running them blind
+here would just silently skip everything. Run them by hand once the loop above is done
+and you know what stations/splits exist.
 
 ## Starting a NEW field day
 
@@ -243,7 +273,7 @@ steps with a different `$D`.
    (+ its `.jpg`/`.RAW` siblings) flat in that one folder, plus `HeaderLog.csv`. This flat
    layout is what `survey_field_data.py`/`organize_by_location.py`/`make_location_map.py`
    (steps 0–2) read directly, non-recursively — they will not find scans nested any deeper.
-2. **Run steps 0–9 exactly as in "the whole day in one block" above**, with
+2. **Run steps 0–8 exactly as in "the whole day in one block" above**, with
    `D=Data_NatureSpec/<new_day>`. If `--site` should show a cross-sub-case summary for this
    day too (only matters once a station has been split, §5), add an entry to the `SITES`
    dict at the top of `make_all_spectra_figs.py` — it is intentionally a short hardcoded
