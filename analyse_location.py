@@ -290,7 +290,7 @@ def assert_same_dataset(scans):
     return span
 
 
-def fig_rrs(water, sky, wl, outdir, tag, panel_r, rho):
+def fig_rrs(water, sky, wl, outdir, tag, panel_r, rho, glint="none"):
     """Three treatments, from blind to geometry-aware, so the envelope is attributable.
 
       A  all water x sky pairings, fixed rho          -- what you get with no geometry
@@ -318,7 +318,7 @@ def fig_rrs(water, sky, wl, outdir, tag, panel_r, rho):
             else rho
         return rrs_three_scan(wl, w["spec"].columns["rad_target"],
                               sk["spec"].columns["rad_target"],
-                              w["spec"].columns["rad_ref"], panel_r, r, "none").rrs
+                              w["spec"].columns["rad_ref"], panel_r, r, glint).rrs
 
     A = [rrs_of(w, sk, False) for w in water for sk in sky]
     B = [rrs_of(w, sk, True) for w in water for sk in sky]
@@ -484,6 +484,10 @@ def fig_geometry(scans, water, sky, wl, outdir, tag, panel_r, rho):
         lt = w["spec"].columns["rad_target"]
         lp = w["spec"].columns["rad_ref"]
         for sk in sky:
+            # Deliberately "none": this figure's own diagnostic IS the uncorrected
+            # NIR-similarity mismatch across pairings (best/worst pair by that
+            # mismatch); correcting glint here would partially zero out the very
+            # thing being measured.
             r = rrs_three_scan(wl, lt, sk["spec"].columns["rad_target"], lp, panel_r,
                                rho, "none").rrs
             combos.append(r)
@@ -532,7 +536,7 @@ def fig_geometry(scans, water, sky, wl, outdir, tag, panel_r, rho):
 
 
 # ---------------------------------------------------------------- figure 6
-def fig_sensitivity(water, sky, wl, outdir, tag, panel_r, rho, fov):
+def fig_sensitivity(water, sky, wl, outdir, tag, panel_r, rho, fov, glint="none"):
     """Does the pointing angle or the footprint systematically move R_rs?"""
     import numpy as np
     from scipy import stats as sps
@@ -545,7 +549,7 @@ def fig_sensitivity(water, sky, wl, outdir, tag, panel_r, rho, fov):
     rows = []
     for w in water:
         r = rrs_three_scan(wl, w["spec"].columns["rad_target"], l_sky_mean,
-                           w["spec"].columns["rad_ref"], panel_r, rho, "none").rrs
+                           w["spec"].columns["rad_ref"], panel_r, rho, glint).rrs
         if w["range"] is None:
             continue          # no range in this header -> no footprint for this scan
         fp = 2 * w["range"] * math.tan(math.radians(fov / 2.0))
@@ -560,7 +564,7 @@ def fig_sensitivity(water, sky, wl, outdir, tag, panel_r, rho, fov):
         for w in water:
             r = rrs_three_scan(wl, w["spec"].columns["rad_target"],
                                sk["spec"].columns["rad_target"],
-                               w["spec"].columns["rad_ref"], panel_r, rho, "none").rrs
+                               w["spec"].columns["rad_ref"], panel_r, rho, glint).rrs
             vals.append(r[i443])
         sky_rows.append({"tilt": sk["spec"].tilt_y_deg, "r443": float(np.mean(vals)),
                          "n": sk["n"]})
@@ -757,7 +761,7 @@ def fig_rho_correction(water, sky, wl, outdir, tag, panel_r):
 
 
 # ---------------------------------------------------------------- figure 9
-def fig_variability(water, sky, wl, outdir, tag, panel_r, panels):
+def fig_variability(water, sky, wl, outdir, tag, panel_r, panels, glint="none"):
     """Is the residual scan-to-scan spread MEASUREMENT error or real water variability?
 
     Four signatures separate them, and they agree here:
@@ -781,7 +785,7 @@ def fig_variability(water, sky, wl, outdir, tag, panel_r, panels):
         r = rho_at_angle(view_zenith_from_tilt(w["spec"].tilt_y_deg))
         R.append(rrs_three_scan(wl, w["spec"].columns["rad_target"],
                                 sk["spec"].columns["rad_target"],
-                                w["spec"].columns["rad_ref"], panel_r, r, "none").rrs)
+                                w["spec"].columns["rad_ref"], panel_r, r, glint).rrs)
         t.append(w["gps"] * 60.0); names.append(w["n"])
     wl_a = np.array(wl); m = (wl_a >= 420) & (wl_a <= 750)
     X = np.array(R)[:, m]; lam = wl_a[m]; t = np.array(t)
@@ -802,7 +806,14 @@ def fig_variability(water, sky, wl, outdir, tag, panel_r, panels):
         c = np.array([x["spec"].columns[key] for x in g])[:, (wl_a >= 450) &
                                                           (wl_a <= 650)]
         return 100 * float(np.mean(c.std(0) / c.mean(0)))
-    fl_panel, fl_sky = sp(panels, "rad_ref"), sp(sky, "rad_target")
+    # A spread over ONE reading is 0 by definition, not "a perfect instrument" -- some
+    # stations record the panel just once (LOC2's whole 23-scan run has a single stored
+    # reference, vs LOC1's two). Report that plainly rather than a floor of exactly 0.0
+    # that silently breaks anything downstream dividing by it (a genuine "infx" landed
+    # in an early LOC2a report before this guard).
+    panel_measurable = len(panels) >= 2
+    fl_panel = sp(panels, "rad_ref") if panel_measurable else float("nan")
+    fl_sky = sp(sky, "rad_target")
 
     fig, axes = plt.subplots(1, 3, figsize=(17, 5.0))
     a = axes[0]
@@ -838,8 +849,10 @@ def fig_variability(water, sky, wl, outdir, tag, panel_r, panels):
     a.grid(alpha=0.25)
     a.set_title("Amplitude vs time: factor %.2f, no trend\n"
                 "distance-vs-time-gap r=%+.2f (p=%.2f)\n"
-                "instrument floor %.1f %%, sky %.1f %%, water %.1f %%"
-                % (amp.max() / amp.min(), r_t, p_t, fl_panel, fl_sky, raw),
+                "instrument floor %s, sky %.1f %%, water %.1f %%"
+                % (amp.max() / amp.min(), r_t, p_t,
+                   "%.1f %%" % fl_panel if panel_measurable
+                   else "n/a (1 panel ref)", fl_sky, raw),
                 fontsize=10, loc="left")
     fig.suptitle("%s — is the residual spread measurement error or real water?" % tag,
                  fontsize=13, weight="bold")
@@ -849,12 +862,13 @@ def fig_variability(water, sky, wl, outdir, tag, panel_r, panels):
     return pth, {"pc1": 100 * var[0], "raw": raw, "nor": nor,
                  "amp_frac": 100 * (1 - (nor / raw) ** 2),
                  "ratio": float(amp.max() / amp.min()), "r_t": r_t, "p_t": p_t,
-                 "floor": fl_panel, "sky_floor": fl_sky}
+                 "floor": fl_panel, "floor_measurable": panel_measurable,
+                 "sky_floor": fl_sky}
 
 
 
 # --------------------------------------------------------------- figure 10
-def fig_final(water, sky, wl, outdir, tag, panel_r):
+def fig_final(water, sky, wl, outdir, tag, panel_r, glint="none"):
     """THE PRODUCT: a clean mean shape, with amplitude reported separately.
 
     92 % of the scan-to-scan variance at this site is a multiplicative factor -- the
@@ -876,7 +890,7 @@ def fig_final(water, sky, wl, outdir, tag, panel_r):
         r = rho_at_angle(view_zenith_from_tilt(w["spec"].tilt_y_deg))
         R.append(rrs_three_scan(wl, w["spec"].columns["rad_target"],
                                 sk["spec"].columns["rad_target"],
-                                w["spec"].columns["rad_ref"], panel_r, r, "none").rrs)
+                                w["spec"].columns["rad_ref"], panel_r, r, glint).rrs)
         names.append(w["n"])
     wl_a = np.array(wl)
     m = (wl_a >= RLO) & (wl_a <= RHI)
@@ -957,7 +971,7 @@ def fig_final(water, sky, wl, outdir, tag, panel_r):
 
 
 # --------------------------------------------------------------- figure 11
-def fig_scaled_method(water, sky, wl, outdir, tag, panel_r):
+def fig_scaled_method(water, sky, wl, outdir, tag, panel_r, glint="none"):
     """How the amplitude-normalised mean works, step by step. THEORY_SCALED_MEAN.md."""
     import numpy as np
     pairs = match_by_angle(water, sky)
@@ -966,7 +980,7 @@ def fig_scaled_method(water, sky, wl, outdir, tag, panel_r):
         r = rho_at_angle(view_zenith_from_tilt(w["spec"].tilt_y_deg))
         R.append(rrs_three_scan(wl, w["spec"].columns["rad_target"],
                                 sk["spec"].columns["rad_target"],
-                                w["spec"].columns["rad_ref"], panel_r, r, "none").rrs)
+                                w["spec"].columns["rad_ref"], panel_r, r, glint).rrs)
         names.append(w["n"])
     wl_a = np.array(wl); m = (wl_a >= RLO) & (wl_a <= RHI)
     X = np.array(R)[:, m]; lam = wl_a[m]
@@ -1046,7 +1060,7 @@ def fig_scaled_method(water, sky, wl, outdir, tag, panel_r):
 
 
 # --------------------------------------------------------------- figure 12
-def fig_final_mean(water, sky, wl, outdir, tag, panel_r):
+def fig_final_mean(water, sky, wl, outdir, tag, panel_r, glint="none"):
     """The deliverable on its own: mean R_rs with the two uncertainties separated."""
     import numpy as np
     pairs = match_by_angle(water, sky)
@@ -1055,7 +1069,7 @@ def fig_final_mean(water, sky, wl, outdir, tag, panel_r):
         r = rho_at_angle(view_zenith_from_tilt(w["spec"].tilt_y_deg))
         R.append(rrs_three_scan(wl, w["spec"].columns["rad_target"],
                                 sk["spec"].columns["rad_target"],
-                                w["spec"].columns["rad_ref"], panel_r, r, "none").rrs)
+                                w["spec"].columns["rad_ref"], panel_r, r, glint).rrs)
     wl_a = np.array(wl); m = (wl_a >= RLO) & (wl_a <= RHI)
     X = np.array(R)[:, m]; lam = wl_a[m]
     core = (lam >= 450) & (lam <= 700)
@@ -1103,7 +1117,8 @@ def fig_final_mean(water, sky, wl, outdir, tag, panel_r):
 
 
 
-def fig_sky_choice(water, sky, wl, outdir, tag, panel_r):
+def fig_sky_choice(water, sky, wl, outdir, tag, panel_r, floor, shape, watersd,
+                   glint="none"):
     """PER WATER SCAN: which sky is best, what the choice costs, and does it matter.
 
     fig4 shows the pooled envelope over all pairings and fig5 shows the geometry, but
@@ -1111,14 +1126,17 @@ def fig_sky_choice(water, sky, wl, outdir, tag, panel_r):
     the sky I pair it with move the answer, and is that movement large compared with the
     things we already know the size of?
 
-    The three reference scales it is graded against, all measured in this dataset:
-      0.6 %   panel replicate scatter -- the instrument floor
-      1.7 %   shape uncertainty of the amplitude-normalised mean (fig11)
-     11.4 %   scan-to-scan amplitude spread -- real water variability (fig9)
+    ``floor``/``shape``/``watersd`` are this STATION's own three reference scales
+    (instrument floor from fig9's panel replicates, shape uncertainty from fig10/
+    fig_final's scaled mean, scan-to-scan amplitude spread from fig9) -- passed in
+    rather than hardcoded, because a station-specific comparison against LOC1's
+    numbers (1.7 %% shape uncertainty, etc.) would be silently wrong at any other
+    station. LOC1's own numbers happen to be 0.6/1.7/11.4, which is where those three
+    constants came from before this was fixed.
     """
     import numpy as np
 
-    FLOOR, SHAPE, WATERSD = 0.6, 1.7, 11.4
+    FLOOR, SHAPE, WATERSD = floor, shape, watersd
     i443 = min(range(len(wl)), key=lambda k: abs(wl[k] - 443))
     i555 = min(range(len(wl)), key=lambda k: abs(wl[k] - 555))
     band_m = [i for i, x in enumerate(wl) if RLO <= x <= RHI]
@@ -1132,7 +1150,7 @@ def fig_sky_choice(water, sky, wl, outdir, tag, panel_r):
         curves, dth = [], []
         for sk in sky:
             curves.append(rrs_three_scan(wl, lt, sk["spec"].columns["rad_target"], lp,
-                                         panel_r, rho, "none").rrs)
+                                         panel_r, rho, glint).rrs)
             dth.append(abs(view_zenith_from_tilt(sk["spec"].tilt_y_deg) - tv))
         C = np.array(curves)
         best = int(np.argmin(dth))
@@ -1157,9 +1175,11 @@ def fig_sky_choice(water, sky, wl, outdir, tag, panel_r):
     x = np.arange(len(rows))
     ax.bar(x - 0.2, [r["sd443"] for r in rows], 0.4, color="#2c6f9b", label="443 nm")
     ax.bar(x + 0.2, [r["sd555"] for r in rows], 0.4, color="#2e7d32", label="555 nm")
-    for y, c, l in ((FLOOR, "#888", "instrument floor 0.6 %"),
-                    (SHAPE, "#8a6000", "shape uncertainty 1.7 %"),
-                    (WATERSD, "#c0392b", "real water spread 11.4 %")):
+    for y, c, l in ((FLOOR, "#888", "instrument floor %.1f %%" % FLOOR),
+                    (SHAPE, "#8a6000", "shape uncertainty %.1f %%" % SHAPE),
+                    (WATERSD, "#c0392b", "real water spread %.1f %%" % WATERSD)):
+        if not np.isfinite(y):
+            continue          # not measurable at this station (e.g. 1 panel ref)
         ax.axhline(y, color=c, ls="--", lw=1.6)
         ax.text(len(rows) - 0.4, y * 1.04, l, fontsize=8, color=c, ha="right")
     ax.set_xticks(x); ax.set_xticklabels([r["n"] for r in rows], rotation=90, fontsize=7)
@@ -1176,8 +1196,9 @@ def fig_sky_choice(water, sky, wl, outdir, tag, panel_r):
     ax.bar(x - 0.2, [r["d443"] for r in rows], 0.4, color="#2c6f9b", label="443 nm")
     ax.bar(x + 0.2, [r["d555"] for r in rows], 0.4, color="#2e7d32", label="555 nm")
     ax.axhline(0, color="k", lw=1)
-    for s in (1, -1):
-        ax.axhline(s * FLOOR, color="#888", ls=":", lw=1.4)
+    if np.isfinite(FLOOR):
+        for s in (1, -1):
+            ax.axhline(s * FLOOR, color="#888", ls=":", lw=1.4)
     ax.set_xticks(x); ax.set_xticklabels([r["n"] for r in rows], rotation=90, fontsize=7)
     ax.set_ylabel("angle-matched $-$ average-of-all-skies  (%)")
     ax.legend(fontsize=8.5); ax.grid(alpha=0.25, axis="y")
@@ -1225,8 +1246,11 @@ def fig_sky_choice(water, sky, wl, outdir, tag, panel_r):
                "this; anything read off the green does not."
                % (m443, "ABOVE the %.1f %% shape uncertainty" % SHAPE
                   if m443 > SHAPE else "below the shape uncertainty",
-                  m555, "BELOW the %.1f %% instrument floor" % FLOOR
-                  if m555 < FLOOR else "above the instrument floor"))
+                  m555,
+                  "instrument floor not measurable at this station (1 panel ref)"
+                  if not np.isfinite(FLOOR) else
+                  ("BELOW the %.1f %% instrument floor" % FLOOR if m555 < FLOOR
+                   else "above the instrument floor")))
     ax.text(0.0, 0.97,
             "DOES THE SKY CHOICE MATTER, AT THE SCALE WE HAVE?\n"
             "%s\n\n"
@@ -1273,11 +1297,18 @@ def fig_sky_choice(water, sky, wl, outdir, tag, panel_r):
 
 #: What each figure settles. Written into analysis/README.md so the index cannot drift
 #: from the figures: every entry is checked against the file the run actually produced.
+#: What each figure settles, described by METHOD not by result. Earlier versions of
+#: several of these entries quoted specific numbers (and in fig7's case, specific scan
+#: IDs) from the FIRST station this table was written against (LOC1) -- fine for LOC1,
+#: silently wrong for every other station this shared table also describes, since a
+#: different station's PCA variance, correlation, scan IDs etc. are naturally different.
+#: Every number belongs in that station's own REPORT.txt / FINAL_Rrs.csv, not baked into
+#: a description reused across stations.
 FIG_INDEX = [
     ("fig1_pooled_measurements.png", "The three raw families, pooled",
      "Every panel, sky and water radiance on one axis each. The spread you see here is "
-     "the raw material for everything downstream: panel replicates hold to ~1 %, sky to "
-     "~14 %, water to ~33 %. Land targets are drawn but excluded from R_rs."),
+     "the raw material for everything downstream. Land targets are drawn but excluded "
+     "from R_rs. See REPORT.txt for this station's panel/sky/water spread percentages."),
     ("fig2_steps.png", "The calculation, step by step",
      "One water scan carried through L_p -> E_d = pi L_p / R_p -> L_w = L_t - rho L_sky "
      "-> R_rs = L_w / E_d, each stage plotted, so the arithmetic is inspectable rather "
@@ -1291,38 +1322,44 @@ FIG_INDEX = [
      "part of the spread is the pairing choice and what part is the water."),
     ("fig5_geometry_and_pairing.png", "The geometry actually achieved",
      "Sky and water view angles, the mismatch of each matched pair, and the best pair by "
-     "smallest mismatch. The sky scans span only ~5 deg, which is why matching buys "
-     "little here."),
+     "smallest mismatch. Whether matching buys anything here depends on how much angular "
+     "range the sky scans at THIS station actually span -- see the figure."),
     ("fig6_angle_footprint.png", "Does angle matter? Does footprint?",
-     "R_rs(443) against view angle and against footprint, with the confound controls. "
-     "Angle: yes (r=+0.74, p=0.006, +27 % over the observed span). Footprint: not "
-     "separable from time in this dataset (range correlates with time at r=0.92)."),
-    ("fig7_land_targets.png", "The two land scans, kept separate",
-     "00014 (algae on concrete) and 00015 (bare concrete), reported as REFLECTANCE not "
-     "R_rs, because for an opaque surface the reflected sky is illumination, not "
-     "contamination, so rho L_sky must NOT be subtracted."),
+     "R_rs(443) against view angle and against footprint, with confound controls (does a "
+     "tilt trend survive controlling for time and range; is range even separable from "
+     "time at this station). See REPORT.txt for the correlations and p-values."),
+    ("fig7_land_targets.png", "The land-classified scans, kept separate",
+     "Every scan classified 'land' by spectral shape (opaque-surface signature, not a "
+     "water-column one), reported as REFLECTANCE not R_rs -- for an opaque surface the "
+     "reflected sky is illumination, not contamination, so rho L_sky must NOT be "
+     "subtracted. Which scan numbers these are, and whether they read as vegetated or "
+     "bare, is in REPORT.txt; 'land' does not necessarily mean dry ground -- check the "
+     "scan's own photograph."),
     ("fig8_rho_angle_correction.png", "Correcting rho per scan instead of fixing it",
-     "rho(theta_v) Fresnel-scaled from Mobley's 0.028 at 40 deg. Removes the angle trend "
-     "(p 0.006 -> 0.244) and cuts scatter 11.1 % -> 8.6 %. The tilt datum was determined "
-     "FROM the data, and the three candidate datums are shown."),
+     "rho(theta_v) Fresnel-scaled from Mobley's 0.028 at 40 deg, tested against a fixed "
+     "rho. Falsifiable: if a tilt-vs-R_rs trend is really rho's angular dependence, "
+     "correcting at each scan's own angle must remove it, not just shrink it. The tilt "
+     "datum was determined FROM the data (three candidate datums are shown), not "
+     "assumed."),
     ("fig9_variability_origin.png", "Where the remaining spread comes from",
-     "PCA of the 12 R_rs: PC1 is 98.3 % of the variance and 92 % pure amplitude. Shape "
-     "is stable to 1.7 % over 450-700 nm while amplitude moves +-11.4 %, with no time "
-     "trend (r=+0.03, p=0.81) and 18x the instrument floor. So it is real water "
-     "variability, not measurement noise."),
+     "PCA of the water R_rs, amplitude-vs-shape decomposition, a time-trend check, and "
+     "comparison against the panel's own instrument floor -- four independent tests for "
+     "whether the residual scan-to-scan spread is real water variability or measurement "
+     "noise. See REPORT.txt for this station's numbers on each."),
     ("fig10_final_product.png", "The final product, all treatments together",
      "Mean and full spread under each pairing/rho treatment, so the choice is visible "
      "rather than buried."),
     ("fig11_scaled_mean_method.png", "The amplitude-normalised mean, derived",
      "The iterative scaled mean: each scan rescaled onto the running mean, the mean "
-     "re-formed, repeat. Separates the 1.7 % shape uncertainty from the 11 % amplitude "
-     "spread instead of reporting one inflated number at every band. Full derivation and "
-     "the rank-1 SVD equivalence in THEORY_SCALED_MEAN.md."),
+     "re-formed, repeat. Separates a SHAPE uncertainty from an AMPLITUDE spread instead "
+     "of reporting one inflated number at every band -- this station's own shape_cv/"
+     "amp_cv are in FINAL_Rrs.csv's header comment. Full derivation and the rank-1 SVD "
+     "equivalence in THEORY_SCALED_MEAN.md."),
     ("fig13_sky_choice_per_scan.png", "Per-scan sky pairing: does the choice matter?",
      "For EACH water scan: which sky the angle matcher picked, the spread that the "
      "choice of sky causes, and the difference between angle-matching and simply "
-     "averaging every sky -- all graded against three scales measured in this dataset "
-     "(0.6 % instrument floor, 1.7 % shape uncertainty, 11.4 % real water spread). "
+     "averaging every sky -- graded against THIS station's own instrument floor, shape "
+     "uncertainty and water spread (computed from fig9/fig11, not a fixed reference). "
      "Answers 'does it matter at the scale we have' with a number rather than a "
      "judgement. Numbers also in `sky_choice_per_scan.csv`."),
     ("fig12_FINAL_mean_Rrs.png", "FINAL_Rrs.csv, plotted",
@@ -1380,6 +1417,15 @@ def main():
                          "shown the water is not one population. The excluded scans are "
                          "still shown in fig1/fig4/fig9 (so the exclusion is visible, "
                          "not silent) but are NOT averaged into FINAL_Rrs.csv.")
+    ap.add_argument("--glint", choices=["none", "nir_zero", "nir_similarity"],
+                    default="none",
+                    help="glint correction applied uniformly to every water scan in "
+                         "the final-product path (fig4/fig6/fig9/fig10/fig11/fig12/"
+                         "fig13) and reported in REPORT.txt. Default 'none' matches "
+                         "every run before this option existed, so LOC1's numbers are "
+                         "provably unchanged unless this is passed explicitly. NOT "
+                         "applied in fig5 (its own diagnostic IS the uncorrected "
+                         "NIR-similarity mismatch) or fig8 (an isolated rho test).")
     a = ap.parse_args()
 
     scans = survey(a.folder)
@@ -1415,6 +1461,9 @@ def main():
     P("%d sky, %d water, %d LAND targets" % (len(sky), len(water), len(land)))
     P("all scans within %.0f m and one foreoptic: pairing cannot leave this location"
       % span_m)
+    P("glint correction applied to the final product: %s%s"
+      % (a.glint, "  (default -- no correction)" if a.glint == "none" else
+         "  -- NOT the default, see --glint in FIELD_DAY_WORKFLOW.md"))
     P("%d distinct panel references, so the panel was re-taken %d time(s) mid-station"
       % (len(panels), len(panels) - 1))
     rng = [s["range"] for s in scans if s["range"] is not None]
@@ -1488,7 +1537,7 @@ def main():
             raise SystemExit("--exclude-water removed every water scan; nothing left "
                              "to form a final spectrum from")
 
-    p4, r = fig_rrs(water, sky, wl, outdir, tag, a.panel_reflectance, a.rho)
+    p4, r = fig_rrs(water, sky, wl, outdir, tag, a.panel_reflectance, a.rho, a.glint)
     P("R_rs RESULT  (angle-matched pairing, per-scan rho)")
     P("  Rrs(443) = %.5f sr^-1     Rrs(555) = %.5f sr^-1" % (r["rrs443"], r["rrs555"]))
     P("  sky paired to each water by mirrored view angle, WITHIN this location and")
@@ -1540,14 +1589,17 @@ def main():
 
     fov = fov_deg(fo.split("_")[0])
     p6, spec, conf = fig_sensitivity(water, sky, wl, outdir, tag, a.panel_reflectance,
-                                     a.rho, fov)
+                                     a.rho, fov, a.glint)
     p7 = fig_land(land, wl, outdir, tag, a.panel_reflectance) if land else None
     p8, rres, rrange = fig_rho_correction(water, sky, wl, outdir, tag,
                                           a.panel_reflectance)
-    p9, vv = fig_variability(water, sky, wl, outdir, tag, a.panel_reflectance, panels)
-    p10, fcsv, fp = fig_final(water_clean, sky, wl, outdir, tag, a.panel_reflectance)
-    p11 = fig_scaled_method(water_clean, sky, wl, outdir, tag, a.panel_reflectance)
-    p12 = fig_final_mean(water_clean, sky, wl, outdir, tag, a.panel_reflectance)
+    p9, vv = fig_variability(water, sky, wl, outdir, tag, a.panel_reflectance, panels,
+                             a.glint)
+    p10, fcsv, fp = fig_final(water_clean, sky, wl, outdir, tag, a.panel_reflectance,
+                              a.glint)
+    p11 = fig_scaled_method(water_clean, sky, wl, outdir, tag, a.panel_reflectance,
+                            a.glint)
+    p12 = fig_final_mean(water_clean, sky, wl, outdir, tag, a.panel_reflectance, a.glint)
     P("")
     P("WHAT IS THE REMAINING SPREAD?  measurement error, or real water?")
     P("  SVD mode 1 carries          %5.1f %%   coherent; noise would spread out" % vv["pc1"])
@@ -1558,9 +1610,14 @@ def main():
     P("  spectral distance vs time   r=%+.2f p=%.2f  -> %s"
       % (vv["r_t"], vv["p_t"],
          "drift" if vv["p_t"] < 0.05 and vv["r_t"] > 0 else "NO time trend"))
-    P("  instrument floor (panel)    %.1f %%   sky %.1f %%   water %.1f %%"
-      % (vv["floor"], vv["sky_floor"], vv["raw"]))
-    P("  water exceeds the instrument floor by %.0fx." % (vv["raw"] / vv["floor"]))
+    if vv["floor_measurable"]:
+        P("  instrument floor (panel)    %.1f %%   sky %.1f %%   water %.1f %%"
+          % (vv["floor"], vv["sky_floor"], vv["raw"]))
+        P("  water exceeds the instrument floor by %.0fx." % (vv["raw"] / vv["floor"]))
+    else:
+        P("  instrument floor (panel)    n/a -- only 1 panel reference recorded at "
+          "this station, so there is no panel-replicate spread to measure")
+        P("  sky %.1f %%   water %.1f %%" % (vv["sky_floor"], vv["raw"]))
     P("")
     P("  READING: the spread is REAL WATER, not measurement error. The composition is")
     P("  near-constant (shape stable to %.1f %%) while the AMOUNT of scattering material"
@@ -1665,7 +1722,8 @@ def main():
         P("  The bare target doubles as a check on the E_d chain: a mineral surface")
         P("  should be spectrally smooth and grey, and it is.")
 
-    p13, skyrows = fig_sky_choice(water, sky, wl, outdir, tag, a.panel_reflectance)
+    p13, skyrows = fig_sky_choice(water, sky, wl, outdir, tag, a.panel_reflectance,
+                                  vv["floor"], fp["shape_core"], vv["raw"], a.glint)
     P("")
     P("PER-SCAN SKY PAIRING  (fig13, sky_choice_per_scan.csv)")
     P("  For each water scan: which sky the angle matcher picked, how much the CHOICE")
@@ -1680,8 +1738,12 @@ def main():
     _mx = max(r["sdband"] for r in skyrows)
     P("  band-mean spread from the sky choice: median %.2f %%, worst %.2f %%"
       % (_med, _mx))
-    P("  against 0.6 % instrument floor, 1.7 % shape uncertainty, 11.4 % water spread")
-    P("  -> %s" % ("the sky choice does NOT matter at this scale" if _mx < 1.7 else
+    P("  against %s instrument floor, %.1f %% shape uncertainty, %.1f %% water "
+      "spread (this station's own, from fig9/fig11)"
+      % ("%.1f %%" % vv["floor"] if vv["floor_measurable"] else "n/a (1 panel ref)",
+         fp["shape_core"], vv["raw"]))
+    P("  -> %s" % ("the sky choice does NOT matter at this scale"
+                   if _mx < fp["shape_core"] else
                    "the worst scans exceed the shape uncertainty"))
     txt = "\n".join(L)
     print(txt)

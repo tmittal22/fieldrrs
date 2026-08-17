@@ -4,6 +4,7 @@ LOC2b_66.89677N_162.57953W  ·  FLENS8_FOV08
 12 scans   21:06-21:16 UTC   sun 33.85-34.34 deg   FOV 8 deg
 9 sky, 3 water, 0 LAND targets
 all scans within 52 m and one foreoptic: pairing cannot leave this location
+glint correction applied to the final product: none  (default -- no correction)
 1 distinct panel references, so the panel was re-taken 0 time(s) mid-station
 range 0.876-1.041 m -> footprint 0.12-0.15 m across (2 R tan(FOV/2))
 
@@ -57,8 +58,8 @@ WHAT IS THE REMAINING SPREAD?  measurement error, or real water?
   -> 46 % of the variance is pure AMPLITUDE, only 0.4 % is SHAPE
   R_rs(555) range             factor 1.01 across the station
   spectral distance vs time   r=+0.92 p=0.25  -> NO time trend
-  instrument floor (panel)    0.0 %   sky 4.6 %   water 0.6 %
-  water exceeds the instrument floor by infx.
+  instrument floor (panel)    n/a -- only 1 panel reference recorded at this station, so there is no panel-replicate spread to measure
+  sky 4.6 %   water 0.6 %
 
   READING: the spread is REAL WATER, not measurement error. The composition is
   near-constant (shape stable to 0.4 %) while the AMOUNT of scattering material
@@ -127,5 +128,5 @@ PER-SCAN SKY PAIRING  (fig13, sky_choice_per_scan.csv)
   00028   00023       0.3      2.44      0.38       0.07
   00029   00042       0.0      2.36      0.35       1.82
   band-mean spread from the sky choice: median 0.93 %, worst 0.94 %
-  against 0.6 % instrument floor, 1.7 % shape uncertainty, 11.4 % water spread
-  -> the sky choice does NOT matter at this scale
+  against n/a (1 panel ref) instrument floor, 0.2 % shape uncertainty, 0.6 % water spread (this station's own, from fig9/fig11)
+  -> the worst scans exceed the shape uncertainty

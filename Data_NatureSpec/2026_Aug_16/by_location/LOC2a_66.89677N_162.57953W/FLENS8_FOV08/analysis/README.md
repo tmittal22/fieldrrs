@@ -11,7 +11,7 @@
 
 ### `fig1_pooled_measurements.png` -- The three raw families, pooled
 
-Every panel, sky and water radiance on one axis each. The spread you see here is the raw material for everything downstream: panel replicates hold to ~1 %, sky to ~14 %, water to ~33 %. Land targets are drawn but excluded from R_rs.
+Every panel, sky and water radiance on one axis each. The spread you see here is the raw material for everything downstream. Land targets are drawn but excluded from R_rs. See REPORT.txt for this station's panel/sky/water spread percentages.
 
 ### `fig2_steps.png` -- The calculation, step by step
 
@@ -27,23 +27,23 @@ Every water scan against every sky scan, then the angle-matched subset. Shows wh
 
 ### `fig5_geometry_and_pairing.png` -- The geometry actually achieved
 
-Sky and water view angles, the mismatch of each matched pair, and the best pair by smallest mismatch. The sky scans span only ~5 deg, which is why matching buys little here.
+Sky and water view angles, the mismatch of each matched pair, and the best pair by smallest mismatch. Whether matching buys anything here depends on how much angular range the sky scans at THIS station actually span -- see the figure.
 
 ### `fig6_angle_footprint.png` -- Does angle matter? Does footprint?
 
-R_rs(443) against view angle and against footprint, with the confound controls. Angle: yes (r=+0.74, p=0.006, +27 % over the observed span). Footprint: not separable from time in this dataset (range correlates with time at r=0.92).
+R_rs(443) against view angle and against footprint, with confound controls (does a tilt trend survive controlling for time and range; is range even separable from time at this station). See REPORT.txt for the correlations and p-values.
 
 ### `fig7_land_targets.png` -- NOT PRODUCED by this run
 
-(The two land scans, kept separate -- absent because this location has no such scans.)
+(The land-classified scans, kept separate -- absent because this location has no such scans.)
 
 ### `fig8_rho_angle_correction.png` -- Correcting rho per scan instead of fixing it
 
-rho(theta_v) Fresnel-scaled from Mobley's 0.028 at 40 deg. Removes the angle trend (p 0.006 -> 0.244) and cuts scatter 11.1 % -> 8.6 %. The tilt datum was determined FROM the data, and the three candidate datums are shown.
+rho(theta_v) Fresnel-scaled from Mobley's 0.028 at 40 deg, tested against a fixed rho. Falsifiable: if a tilt-vs-R_rs trend is really rho's angular dependence, correcting at each scan's own angle must remove it, not just shrink it. The tilt datum was determined FROM the data (three candidate datums are shown), not assumed.
 
 ### `fig9_variability_origin.png` -- Where the remaining spread comes from
 
-PCA of the 12 R_rs: PC1 is 98.3 % of the variance and 92 % pure amplitude. Shape is stable to 1.7 % over 450-700 nm while amplitude moves +-11.4 %, with no time trend (r=+0.03, p=0.81) and 18x the instrument floor. So it is real water variability, not measurement noise.
+PCA of the water R_rs, amplitude-vs-shape decomposition, a time-trend check, and comparison against the panel's own instrument floor -- four independent tests for whether the residual scan-to-scan spread is real water variability or measurement noise. See REPORT.txt for this station's numbers on each.
 
 ### `fig10_final_product.png` -- The final product, all treatments together
 
@@ -51,11 +51,11 @@ Mean and full spread under each pairing/rho treatment, so the choice is visible 
 
 ### `fig11_scaled_mean_method.png` -- The amplitude-normalised mean, derived
 
-The iterative scaled mean: each scan rescaled onto the running mean, the mean re-formed, repeat. Separates the 1.7 % shape uncertainty from the 11 % amplitude spread instead of reporting one inflated number at every band. Full derivation and the rank-1 SVD equivalence in THEORY_SCALED_MEAN.md.
+The iterative scaled mean: each scan rescaled onto the running mean, the mean re-formed, repeat. Separates a SHAPE uncertainty from an AMPLITUDE spread instead of reporting one inflated number at every band -- this station's own shape_cv/amp_cv are in FINAL_Rrs.csv's header comment. Full derivation and the rank-1 SVD equivalence in THEORY_SCALED_MEAN.md.
 
 ### `fig13_sky_choice_per_scan.png` -- Per-scan sky pairing: does the choice matter?
 
-For EACH water scan: which sky the angle matcher picked, the spread that the choice of sky causes, and the difference between angle-matching and simply averaging every sky -- all graded against three scales measured in this dataset (0.6 % instrument floor, 1.7 % shape uncertainty, 11.4 % real water spread). Answers 'does it matter at the scale we have' with a number rather than a judgement. Numbers also in `sky_choice_per_scan.csv`.
+For EACH water scan: which sky the angle matcher picked, the spread that the choice of sky causes, and the difference between angle-matching and simply averaging every sky -- graded against THIS station's own instrument floor, shape uncertainty and water spread (computed from fig9/fig11, not a fixed reference). Answers 'does it matter at the scale we have' with a number rather than a judgement. Numbers also in `sky_choice_per_scan.csv`.
 
 ### `fig12_FINAL_mean_Rrs.png` -- FINAL_Rrs.csv, plotted
 

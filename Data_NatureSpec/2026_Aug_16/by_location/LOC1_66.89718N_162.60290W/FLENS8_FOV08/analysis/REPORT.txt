@@ -4,6 +4,7 @@ LOC1_66.89718N_162.60290W  ·  FLENS8_FOV08
 22 scans   20:24-20:41 UTC   sun 31.42-32.47 deg   FOV 8 deg
 8 sky, 12 water, 2 LAND targets
 all scans within 2 m and one foreoptic: pairing cannot leave this location
+glint correction applied to the final product: none  (default -- no correction)
 2 distinct panel references, so the panel was re-taken 1 time(s) mid-station
 range 0.984-1.492 m -> footprint 0.14-0.21 m across (2 R tan(FOV/2))
 
@@ -149,5 +150,5 @@ PER-SCAN SKY PAIRING  (fig13, sky_choice_per_scan.csv)
   00018   00009       0.1      2.71      0.38       1.61
   00019   00000       4.8      2.52      0.36       3.21
   band-mean spread from the sky choice: median 1.47 %, worst 1.74 %
-  against 0.6 % instrument floor, 1.7 % shape uncertainty, 11.4 % water spread
-  -> the worst scans exceed the shape uncertainty
+  against 0.6 % instrument floor, 1.7 % shape uncertainty, 11.2 % water spread (this station's own, from fig9/fig11)
+  -> the sky choice does NOT matter at this scale
