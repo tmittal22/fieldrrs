@@ -1,11 +1,17 @@
 """Station map on satellite imagery.
 
-    python make_location_map.py Data_NatureSpec/2026_Aug_16 --out <dir>
+    python make_location_map.py Data_NatureSpec/2026_Aug_16 --out <dir> --place "Kotzebue, Alaska"
 
 Imagery is fetched once and cached under .tilecache/, so re-runs are offline.
+
+Everything on the map is derived from the scans themselves (date, coordinates, the
+context-inset bounding box) EXCEPT the place name, which nothing in a .sed file records
+-- pass `--place` or the title/context annotation just omit it rather than guess or
+carry over a stale placeholder from a previous day's run.
 """
 
 import argparse
+import datetime
 import math
 import os
 import sys
@@ -31,10 +37,28 @@ def main():
     ap.add_argument("--out", default=".")
     ap.add_argument("--zoom", type=int, default=16)
     ap.add_argument("--provider", default="esri_imagery")
+    ap.add_argument("--place", default="",
+                    help="place name for the title/inset, e.g. 'Kotzebue, Alaska'. "
+                         "Nothing in a .sed file records this, so it is not guessed -- "
+                         "omit it and the map just shows date + coordinates.")
     a = ap.parse_args()
 
     scans = survey(a.folder)
     locs = cluster(scans)
+    # ground truth, not the folder name (which can be named anything) or a hardcoded
+    # date left over from whichever day this script was last run on.
+    dates = sorted({s["spec"].header.get("Date", "").split(",")[0].strip()
+                    for s in scans if s["spec"].header.get("Date")})
+    if dates:
+        try:
+            mm, dd, yy = dates[0].split("/")
+            date_str = datetime.date(int(yy), int(mm), int(dd)).isoformat()
+        except ValueError:
+            date_str = dates[0]
+        if len(dates) > 1:
+            date_str += " to " + dates[-1]
+    else:
+        date_str = "date unknown"
     lats = [s["lat"] for s in scans]
     lons = [s["lon"] for s in scans]
     padx = max(0.006, (max(lons) - min(lons)) * 0.45)
@@ -94,8 +118,9 @@ def main():
             weight="bold", color="w", zorder=9,
             path_effects=None)
     ax.set_xlabel("longitude ($^\\circ$E)"); ax.set_ylabel("latitude ($^\\circ$N)")
-    ax.set_title("2026-08-16  ·  Kotzebue, Alaska  ·  %d scans at %d locations"
-                 % (len(scans), len(locs)), fontsize=13, weight="bold")
+    ax.set_title("%s%s%d scans at %d locations"
+                 % (date_str, "  ·  %s  ·  " % a.place if a.place else "  ·  ",
+                    len(scans), len(locs)), fontsize=13, weight="bold")
     ax.legend(handles=[Line2D([], [], marker="o", ls="", color=COL[k],
                               markeredgecolor="k", label=k)
                        for k in ("water", "sky", "land")],
@@ -108,18 +133,28 @@ def main():
     ax.text(0.0, -0.115, bm.ATTRIBUTION[a.provider] + "   |   Mercator-on-linear axis "
             "error %.2f px" % err, transform=ax.transAxes, fontsize=7.5, color="#444")
 
-    # ---- right column: context + per-location detail
+    # ---- right column: regional context + per-location detail
+    # Computed from the data's own centroid, not hardcoded to any one region -- a fixed
+    # Alaska/Kotzebue-Sound box here would silently mislabel any other field day's map.
     axc = fig.add_axes([0.685, 0.56, 0.29, 0.36])
-    axc.set_xlim(-172, -140); axc.set_ylim(54, 72)
-    axc.add_patch(Rectangle((-164, 66), 3, 1.6, fc="none", ec="#ff2d55", lw=2,
-                            zorder=3))
-    axc.scatter([-162.59], [66.895], s=150, marker="*", color="#ff2d55", zorder=4)
-    axc.axhline(66.5622, color="#2c6f9b", ls="--", lw=1.3)
-    axc.text(-171.5, 66.8, "Arctic Circle", fontsize=8.5, color="#2c6f9b")
-    axc.annotate("Kotzebue Sound", (-162.59, 66.895), xytext=(-157, 62),
-                 fontsize=10, weight="bold", color="#ff2d55",
-                 arrowprops=dict(arrowstyle="->", color="#ff2d55", lw=1.5))
-    axc.set_title("Alaska context", fontsize=10.5, loc="left")
+    lonm = sum(lons) / len(lons)
+    ctx_lat = (latm - 8, latm + 8)
+    ctx_lon = (lonm - 16, lonm + 16)
+    axc.set_xlim(*ctx_lon); axc.set_ylim(*ctx_lat)
+    axc.add_patch(Rectangle((box[2], box[0]), box[3] - box[2], box[1] - box[0],
+                            fc="none", ec="#ff2d55", lw=2, zorder=3))
+    axc.scatter([lonm], [latm], s=150, marker="*", color="#ff2d55", zorder=4)
+    if ctx_lat[0] <= 66.5622 <= ctx_lat[1]:
+        axc.axhline(66.5622, color="#2c6f9b", ls="--", lw=1.3)
+        axc.text(0.02, 0.9, "Arctic Circle", fontsize=8.5, color="#2c6f9b",
+                 transform=axc.transAxes)
+    if a.place:
+        axc.annotate(a.place, (lonm, latm), xytext=(0.55, 0.12),
+                     textcoords="axes fraction",
+                     fontsize=10, weight="bold", color="#ff2d55",
+                     arrowprops=dict(arrowstyle="->", color="#ff2d55", lw=1.5))
+    axc.set_title("Regional context" + (" — %s" % a.place if a.place else ""),
+                 fontsize=10.5, loc="left")
     axc.grid(alpha=0.3); axc.tick_params(labelsize=8)
 
     axt = fig.add_axes([0.685, 0.08, 0.29, 0.42]); axt.axis("off")
@@ -137,11 +172,11 @@ def main():
             by.setdefault(s["fo"], []).append(s)
         for fo in sorted(by):
             g = by[fo]
-            lines.append("   %-7s FOV %2.0f deg  %2d scans: %d water, %d sky, %d veg"
+            lines.append("   %-7s FOV %2.0f deg  %2d scans: %d water, %d sky, %d land"
                          % (fo, fov_deg(fo), len(g),
                             sum(1 for x in g if x["role"] == "water"),
                             sum(1 for x in g if x["role"] == "sky"),
-                            sum(1 for x in g if x["role"] == "vegetation")))
+                            sum(1 for x in g if x["role"] == "land")))
         lines.append("")
     mixed = [i + 1 for i, c in enumerate(locs)
              if len({x["fo"] for x in c["scans"]}) > 1]

@@ -48,11 +48,24 @@ Writes `by_location/INDEX.md`.
 ## 2. Map of where the stations are
 
 ```bash
-python make_location_map.py Data_NatureSpec/2026_Aug_16
+python make_location_map.py Data_NatureSpec/2026_Aug_16 --place "Kotzebue, Alaska"
 ```
 
 Esri World Imagery basemap, Web-Mercator tiles mosaicked by `basemap.py`. Tiles cache to
 `.tilecache/`, which is **gitignored deliberately** — the imagery is Esri's, not ours.
+
+Everything on the map is derived from the scans themselves (date from the `.sed` header,
+coordinates, the regional-context bounding box) **except the place name** — nothing in a
+`.sed` file records it, so `--place` is the one thing you supply by hand. Omit it and the
+map still works, just without a place name in the title/inset. (This was a real bug until
+this session: the title and the context inset were hardcoded to "2026-08-16 · Kotzebue,
+Alaska" and a fixed Alaska-sized lat/lon box, which would have silently mislabeled any
+other day's or location's map with the wrong date and place. Also a second, silent one in
+the same script: the per-station text summary counted role `"vegetation"`, a string
+`classify()` stopped returning when its third role was renamed to `"land"` — every map
+before this fix reported 0 land-classified scans at every station, including LOC1's own 2
+and LOC2's algae-mat 2. Re-ran on 2026-08-16: same station coordinates/counts as before,
+labels now correct.)
 
 ## 3. Verify the arithmetic BEFORE inverting anything
 
