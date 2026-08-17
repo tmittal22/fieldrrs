@@ -1,14 +1,128 @@
 # GIOP on LOC1 — what the concentrations are worth
 
 Input: `FINAL_Rrs.csv`, the amplitude-normalised mean of 12 angle-matched scans,
-Kotzebue 66.89718 N 162.60290 W, 2026-08-16 20:24–20:41 UTC.
+Kotzebue 66.89718 N 162.60290 W, 2026-08-16 20:24–20:41 UTC. Physics and symbol
+definitions in `THEORY_GIOP_NOTE.md`; how to reproduce in `FIELD_DAY_WORKFLOW.md` §6.
 
-**Summary: run it HYPERSPECTRAL, fit S_dg rather than assuming it, quote a_dg and b_bp
-as ~40 % below the fixed-shape values, and do not quote chlorophyll.**
+> **This file grew by correction.** §A below is the current answer, superseding
+> everything under it. §B and §C are the two corrections that got us here, kept because
+> each names a mistake worth not repeating. §1–§5 at the bottom are the ORIGINAL
+> six-band analysis and are **superseded in almost every number** — kept for provenance
+> only, not for quoting.
 
 ---
 
-> ## ⚠ CORRECTION 2 — "does anything actually FIT?", and an optimiser defect it exposed
+## A. THE ANSWER
+
+### A1. Nothing in the GIOP family fits this water
+
+Against the **measured** per-band uncertainty (median 1.93 % of R_rs), ν = 298:
+
+| configuration | free parameters | χ²_ν | RMS misfit |
+|---|---|---|---|
+| constrained (GIOP-DC: S_dg = 0.018, η from QAA) | 3 amplitudes | **74.5** | 10.9 % |
+| free (S_dg, η fitted — still OC4-seeded) | 5 | **18.1** | 8.5 % |
+| **maximum freedom** (+ a*_φ family/seed released) | 5 + seed profiled | **17.2** | 8.8 % |
+| *a good fit would be* | | *≈ 1* | *≈ 1.9 %* |
+
+The best model in the family still misfits by **4.5× the measurement uncertainty**, and
+the residual is one smooth curve (lag-1 ρ = 0.9964), identical in all 12 scans. Every
+number below is a projection onto a basis that cannot represent this spectrum.
+
+### A2. What to quote, and what not to
+
+| quantity | value | why |
+|---|---|---|
+| **a_dg(443)** | **0.78 m⁻¹** | stable across both free arms (0.779 → 0.781, 0.2 %); per-scan sd 7 % |
+| **b_bp(443)** | **0.042 m⁻¹** | stable across both free arms (0.0430 → 0.0416, 3 %); per-scan sd 12 % |
+| **S_dg** | **0.0113–0.0130 nm⁻¹** | a retrieval, not an assumption — §A3 |
+| u(λ), b_b/a | see §3.1 | assumption-light: only the AOP–IOP operator and the air–water transfer |
+| R_rs shape | 1.7 % | `THEORY_SCALED_MEAN.md` |
+| M_φ / chlorophyll | **do not quote** | 11.5 constrained, 2.3 free, 1.7 max-free — a factor 7 across arms that all fit better than the one giving the largest value |
+| η | **do not quote** | rails at the −1 bound; the b_bp power law is the wrong functional form |
+
+⚠ The earlier recommendation to quote **a_dg = 1.25 ± 0.10 and b_bp = 0.085 ± 0.009 is
+withdrawn.** Those are conditional on S_dg = 0.018, which the data reject.
+
+### A3. S_dg is the best-constrained parameter in the model, and 0.018 is wrong here
+
+χ² mapped over (S_dg, η) has near-vertical contours: a sharp interior minimum in S_dg,
+and almost no curvature in η. Three routes agree:
+
+| route | what was free | S_dg |
+|---|---|---|
+| `giop5`, 16-node sweep | S_dg only, η from QAA | 0.0130 |
+| `giop9` panel b, 34×34 map | S_dg and η on a grid | 0.0113 |
+| the solver, `fit_shapes=True` | S_dg and η, profiled | 0.0118 |
+| **GIOP's own `sdg='obpg'` option** | — (a published band-ratio formula) | **0.0121** |
+| GIOP-DC default | — | 0.0180 |
+
+**The `obpg` line is the important one.** A published parameterisation that shares no
+machinery with our χ² minimisation lands within **7 %** of it, while the DC default is
+**59 % high**. Two independent routes agree this water has a shallower CDOM slope than
+GIOP-DC assumes — consistent with a sediment- and detritus-rich Arctic river mouth.
+
+### A4. The free-vs-constrained gain is not an averaging artefact
+
+Per spectrum, independently (`giop11_chi2_crossplot.png`):
+
+| | |
+|---|---|
+| constrained χ²_ν, median over 12 scans | 72.0 |
+| free χ²_ν, median | 20.6 |
+| improvement factor | **median 4.25×, range 3.16–4.91×** |
+| scans improved | **12 of 12** |
+| correlation of gain with R_rs(555) | r = +0.20 |
+
+Nearly the same factor everywhere, no dependence on brightness: **the constrained shapes
+are wrong in the same structural way in every spectrum.** The plot also checks the
+solver — free is nested inside constrained, so no point may lie above the 1:1 line, and
+that region is empty.
+
+### A5. Chlorophyll: the internal check passes, and it does not help
+
+GIOP uses the OC4 seed's *shape* and discards its *amplitude*, then fits M_φ free — so
+whether M_φ reproduces its own seed is a real consistency test, one GIOP never runs
+because it does not iterate. Sweeping the seed gives two roots: an **unstable** one at
+chl 1.22 (M_φ collapsed onto its zero bound) and a **stable** one at **11.18**, against
+OC4's 9.84 — **agreement to 14 %**.
+
+So the old "factor-2.4 internal contradiction" is dead twice over (once by going
+hyperspectral, once by this). But that agreement belongs to the **constrained** model,
+which fits at χ²_ν = 74. The arms that actually fit want **M_φ ≈ 1.7–2.3, about 5× less
+phytoplankton than OC4 reports**. Two Case-1 relations agreeing with each other is
+evidence about their shared calibration, not about this water.
+
+### A6. Which assumption actually costs the fit
+
+Releasing S_dg and η: χ²_ν **74.5 → 18.1**. Additionally releasing the a*_φ family and
+seed: **18.1 → 17.2**. So the phytoplankton prescription — the assumption most obviously
+wrong on Case-2 water — is **not** what the misfit is made of. The CDOM/detritus slope is.
+
+> ⚠ `fit_shapes=True` is **not** assumption-free: it builds a*_φ once from the OC4 seed
+> and holds it fixed inside the profile. Only the maximum-freedom arm releases it.
+
+### A7. Where the misfit lives, and what would fix it
+
+The residual is a **+9σ lobe at 560–600 nm and a −20σ notch at 690 nm**, the same in all
+12 scans. GIOP cannot reach past 700 nm at all — Bricaud's a*_φ table stops there — so
+the two clearest features of this water, the ~700 nm particulate peak and the ~810 nm
+water-absorption shoulder, are outside the inversion entirely. The instrument recorded
+them; the model cannot use them.
+
+The fix is a turbid-water inversion that extends past 700 nm (QAA-turbid, or `titanspec`'s
+registry with a mineral component), plus an independent constraint on backscatter, since
+η running to its bound says the b_bp power law cannot make the red-rising backscatter the
+data want. **Not** more replicates: the shape is already determined to 1.7 %.
+
+### Files
+
+`giop_FINAL.csv` is the headline table. `giop_assumption_arms.csv` is every arm ranked by
+χ². `giop_per_scan.csv` is the 12 individual fits. Figures indexed in `GIOP/README.md`.
+
+---
+
+> ## B. ⚠ CORRECTION 2 — "does anything actually FIT?", and an optimiser defect it exposed
 >
 > Everything below §2 originally quoted RANGES over an assumption sweep without ever
 > saying how well each arm fitted. Some fit far worse than others, and pooling them
@@ -110,7 +224,7 @@ as ~40 % below the fixed-shape values, and do not quote chlorophyll.**
 > ≤ the fixed-shape cost by construction. `tests/test_fit_shapes_guard.py` pins the
 > nesting property and fails 3.3× against the old solver. Suite 140 passed.
 
-> ## ⚠ CORRECTION, and it inverts part of what this file first said
+> ## C. ⚠ CORRECTION 1, and it inverts part of what this file first said
 >
 > The first version of this analysis ran GIOP on **6 bands** and reported its
 > conditioning as though 6 bands were GIOP's limit. **That was wrong.** GIOP solves on
@@ -136,6 +250,17 @@ as ~40 % below the fixed-shape values, and do not quote chlorophyll.**
 > and needs a band within 2.5 nm of it.
 
 ---
+
+---
+
+# ⚠ SUPERSEDED — the original six-band analysis, kept for provenance only
+
+Everything from here down was written against a **six-band** GIOP run with S_dg fixed at
+0.018. Corrections B and C overturn most of it, and §A is the answer. Do not quote a
+number from below without checking it against §A first: §1's amplitudes are ~2x high
+(six bands), §2.2's "factor-2.4 contradiction" is withdrawn (§A5 measures 14 %
+agreement), §2.3's "27x amplification" is withdrawn (true only at six bands), and §2.4's
+"S_dg is not measured" is exactly backwards (§A3 measures it).
 
 ## 1. What came out
 
@@ -275,17 +400,11 @@ rather than for tuning GIOP.
 
 ---
 
-## 5. Bottom line
+## 5. Bottom line — SUPERSEDED by §A2
 
-| quantity | report it? |
-|---|---|
-| u(λ), b_b/a | **yes** — measured, assumption-light |
-| R_rs shape | **yes** — 1.7 % |
-| R_rs magnitude | yes, with the 11 % environmental spread stated |
-| **S_dg** | **yes, as a retrieval** — 0.011–0.013 nm⁻¹, χ²_ν 74 → 17–24 against the assumed 0.018 (§2d) |
-| a(443), b_b(443) totals | with caution — conditional on the operator, ±25–35 % |
-| a_dg(443), b_bp(443) | **only from the admissible arms**: 0.78–0.82 and 0.039–0.043 m⁻¹, ~40 % below the fixed-S_dg values (§2e) |
-| a_φ / a_dg **split** | **no** — M_φ spans 0 → 41 across the sweep and 0 → 2.3 even among admissible arms |
-| chlorophyll | **no** — Case-1 algorithm on Case-2 water, factor-2.4 self-contradiction |
-| η | **no** — rails at the −1 bound; the b_bp power law is the wrong form here (§2d) |
-| any of it as a *good* fit | **no** — best χ²_ν is 18 against a 1.9 % measured uncertainty (§2a) |
+This table was written before the maximum-freedom arm and the self-consistency test
+existed. **Use §A2.** Two entries in the version that stood here are now wrong: it cited
+the "factor-2.4 self-contradiction" as the reason not to quote chlorophyll (§A5 measures
+14 % agreement — the reason is the factor-7 spread across arms, not a contradiction),
+and it gave a_dg/b_bp as ranges over "admissible arms" rather than as the single stable
+value the free arms agree on.
