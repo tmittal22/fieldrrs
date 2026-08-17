@@ -3,7 +3,32 @@
 Input: `FINAL_Rrs.csv`, the amplitude-normalised mean of 12 angle-matched scans,
 Kotzebue 66.89718 N 162.60290 W, 2026-08-16 20:24–20:41 UTC.
 
-**Summary: do not report concentrations from this. Report `u(λ)`, and the shape.**
+**Summary: run it HYPERSPECTRAL, quote a_dg and b_bp, do not quote chlorophyll.**
+
+> ## ⚠ CORRECTION, and it inverts part of what this file first said
+>
+> The first version of this analysis ran GIOP on **6 bands** and reported its
+> conditioning as though 6 bands were GIOP's limit. **That was wrong.** GIOP solves on
+> whatever grid you give it; the Bricaud a*_φ table is continuous **400–700 nm at 2 nm**.
+> I used 6 bands because that is what upstream `run_giop.m` demos.
+>
+> Running it hyperspectral changes the answer and the uncertainty by more than an order
+> of magnitude:
+>
+> | | 6 bands | hyperspectral (301) |
+> |---|---|---|
+> | M_φ | 23.74 ± **52 %** | **11.47 ± 2.2 %** |
+> | a_dg(443) | 2.171 ± 25.9 % | **1.254 ± 1.7 %** |
+> | b_bp(443) | 0.158 ± 39.1 % | **0.084 ± 1.1 %** |
+> | S_dg swing (0.014→0.022) | chl 0 → 297 | chl 2.4 → 20.9 |
+>
+> Two claims below are therefore **withdrawn**: that the retrieval amplifies input error
+> ~27× (true only at 6 bands), and the "factor-2.4 contradiction" with OC4 (M_φ = 11.5
+> against OC4's 9.84 is agreement to 17 %). The S_dg concern **stands**, reduced from
+> fatal to largest-single-error.
+>
+> Also note 10 nm and 20 nm sampling **fail outright** — GIOP-DC anchors on R_rs(443)
+> and needs a band within 2.5 nm of it.
 
 ---
 
