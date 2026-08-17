@@ -19,6 +19,8 @@ from __future__ import annotations
 import math
 
 __all__ = [
+    "refractive_index_water", "fresnel_reflectance", "rho_at_angle",
+    "view_zenith_from_tilt",
     "RHO_MOBLEY1999", "SIMILARITY_780_870", "RrsResult",
     "rrs_three_scan", "rrs_from_sed", "residual_correction", "rho_advice",
     "overcast_notes", "par_from_ed", "integrated_irradiance", "ed_stability",
@@ -62,6 +64,93 @@ class RrsResult(object):
         i = min(range(len(self.wavelength)),
                 key=lambda j: abs(self.wavelength[j] - target))
         return self.wavelength[i], self.rrs[i]
+
+
+
+# ---------------------------------------------------------------------------
+# Angle-dependent rho
+# ---------------------------------------------------------------------------
+
+def refractive_index_water(wavelength_nm, temperature_c=10.0, salinity=30.0):
+    """Real refractive index of seawater. Quan & Fry (1995) doi:10.1364/AO.34.003477.
+
+    Valid 400-700 nm, 0-30 degC, 0-35 PSU. Defaults are Arctic coastal values.
+    """
+    wl = float(wavelength_nm)
+    t, sal = float(temperature_c), float(salinity)
+    n0, n1, n2, n3, n4 = 1.31405, 1.779e-4, -1.05e-6, 1.6e-8, -2.02e-6
+    n5, n6, n7, n8, n9 = 15.868, 0.01155, -0.00423, -4382.0, 1.1455e6
+    return (n0 + (n1 + n2 * t + n3 * t * t) * sal + n4 * t * t
+            + (n5 + n6 * sal + n7 * t) / wl + n8 / (wl * wl) + n9 / (wl ** 3))
+
+
+def fresnel_reflectance(theta_deg, n=1.34):
+    """Unpolarised Fresnel reflectance of a FLAT air-water interface.
+
+    theta_deg is measured from the surface normal; for the sky-glint ray it equals the
+    view zenith angle.
+    """
+    ti = math.radians(float(theta_deg))
+    st = math.sin(ti) / n
+    if st >= 1.0:
+        return 1.0
+    tt = math.asin(st)
+    ci, ct = math.cos(ti), math.cos(tt)
+    rs = ((ci - n * ct) / (ci + n * ct)) ** 2
+    rp = ((n * ci - ct) / (n * ci + ct)) ** 2
+    return 0.5 * (rs + rp)
+
+
+def rho_at_angle(view_zenith_deg, rho_ref=RHO_MOBLEY1999, theta_ref=40.0,
+                 wavelength_nm=550.0, temperature_c=10.0, salinity=30.0):
+    """rho scaled from its reference angle to the angle you actually achieved:
+
+        rho(theta) = rho_ref * R_Fresnel(theta) / R_Fresnel(theta_ref)
+
+    WHY A RATIO. rho = 0.028 is Mobley's (1999) EFFECTIVE value at 40 deg from nadir,
+    135 deg azimuth, wind under ~5 m/s. Its magnitude comes from averaging over wave
+    facets and is not Fresnel. Its ANGULAR DEPENDENCE does follow the flat-surface
+    Fresnel curve closely for modest departures, because tilting the view changes the
+    mean incidence angle on the facets much as it does on a flat surface. So the ratio
+    is the defensible part; the absolute level is inherited from Mobley.
+
+    It is worth doing. Over 42-50 deg -- an ordinary hand-aimed spread -- Fresnel
+    reflectance rises about 32 %, and a fixed rho puts all of that into R_rs as a
+    systematic tied to your pointing. Measured on LOC1 (n=12): correcting each scan at
+    its own angle removed a p=0.006 trend and cut scan-to-scan scatter from 11.1 % to
+    8.6 %.
+
+    LIMITS. First order: it captures the angular trend only, not the wind or sky-state
+    dependence, and should not be pushed far from theta_ref. Beyond roughly +/-15 deg,
+    or above ~5 m/s wind, the real Mobley (2015) tables are needed and those are not
+    redistributable. Assumes the reference azimuth is maintained.
+    """
+    n = refractive_index_water(wavelength_nm, temperature_c, salinity)
+    return rho_ref * fresnel_reflectance(view_zenith_deg, n) / \
+        fresnel_reflectance(theta_ref, n)
+
+
+def view_zenith_from_tilt(tilt_y_deg):
+    """View zenith angle from the NaturaSpec's reported |tilt|.
+
+    The instrument reports a magnitude with no stated datum, and the two candidate
+    readings differ by 90 deg, so this was settled AGAINST THE DATA. On LOC1 (12 water
+    scans, 39.5-49.6 deg), re-deriving each scan with :func:`rho_at_angle` at its own
+    angle gives, for the tilt-vs-R_rs(443) trend:
+
+        fixed rho = 0.028      r=+0.74 (p=0.006), scatter 11.1 %
+        theta_v = 90 - tilt    r=+0.90 (p<0.001), scatter 18.9 %   WORSE
+        theta_v = tilt         r=+0.36 (p=0.244), scatter  8.6 %   trend gone
+
+    So `tilt_y` IS the view zenith angle. That reading removes the systematic AND
+    tightens the scatter by 23 %; a wrong correction cannot do both, it adds variance,
+    as the other reading does. The values also bracket the nominal 40 deg from nadir,
+    which is what an operator aiming for 40 deg produces.
+
+    Evidence, not proof: n=12 at one location. Re-check on LOC2/LOC3. Under this reading
+    the sky scans sit 44-50 deg from ZENITH.
+    """
+    return abs(float(tilt_y_deg))
 
 
 def rho_advice(wind_ms, sky="clear"):

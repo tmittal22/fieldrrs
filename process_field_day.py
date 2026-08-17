@@ -35,7 +35,7 @@ from fieldrrs.rrs import RHO_MOBLEY1999, rrs_three_scan
 from fieldrrs.sed import read_sed
 from fieldrrs.solar import solar_window_verdict
 
-SKY, WATER, VEG = "sky", "water", "vegetation"
+SKY, WATER, VEG = "sky", "water", "land"
 COL = {SKY: "#7fb3d5", WATER: "#1f7a99", VEG: "#2e7d32"}
 
 
@@ -49,9 +49,24 @@ def classify(spec):
 
     Three signatures, none of them borderline in this dataset:
 
-    * VEGETATION -- the red edge. L(865)/L(450-650) is 1.2-2.0 against < 0.13 for sky
-      and < 0.10 for water, because chlorophyll absorbs red and leaf mesophyll scatters
-      NIR hard. An order of magnitude of separation.
+    * LAND (an opaque target: concrete, algae, tundra). L(865)/L(450-650) is 1.2-2.0
+      against < 0.13 for sky and < 0.10 for water, because water absorbs the NIR and a
+      solid surface does not. An order of magnitude of separation.
+
+      `red_edge` = R(750)/R(670) then says whether that surface is VEGETATED. In this
+      dataset 00014 is algae on concrete (6.3x, deep chlorophyll absorption at 670) and
+      00015 is the bare concrete beside it (1.9x, nearly flat and grey). Both are
+      deliberate targets, not stray scans.
+
+      LAND TARGETS DO NOT GO THROUGH THE R_rs PIPELINE, and that is physics rather than
+      bookkeeping: rho*L_sky is subtracted because for WATER the reflected sky is a
+      contaminant sitting on top of the signal. For an opaque surface the sky is part of
+      the ILLUMINATION, so subtracting it would remove real signal. The correct product
+      is the hemispherical-directional reflectance factor
+
+          R(lambda) = pi L_target / E_d = R_panel * L_target / L_panel
+
+      which needs no rho and no sky scan at all. See `land_reflectance`.
     * SKY -- Rayleigh. Blue/green is ~2.1, because molecular scattering goes as
       lambda^-4.
     * WATER -- blue/green ~0.55 (the opposite sense) AND the NIR is absorbed, since
@@ -65,12 +80,30 @@ def classify(spec):
     g = band(spec, "rad_target", 540, 580)
     vis = band(spec, "rad_target", 450, 650)
     n865 = band(spec, "rad_target", 850, 880)
-    d = {"blue_green": b / g, "nir_vis": n865 / vis, "L_vis": vis}
+    r670 = band(spec, "rad_target", 665, 675)
+    r750 = band(spec, "rad_target", 745, 755)
+    d = {"blue_green": b / g, "nir_vis": n865 / vis, "L_vis": vis,
+         "red_edge": r750 / r670 if r670 else float("nan")}
     if d["nir_vis"] > 0.5:
         return VEG, d
     if d["blue_green"] > 1.3:
         return SKY, d
     return WATER, d
+
+
+def land_reflectance(spec, panel_reflectance=0.99):
+    """Hemispherical-directional reflectance factor of an opaque target.
+
+        R = pi L_target / E_d,   E_d = pi L_panel / R_panel
+          = R_panel * L_target / L_panel
+
+    No rho and no sky scan: for a solid surface the sky is illumination, not glint to
+    remove. Returns (wavelength, R).
+    """
+    lt = spec.columns["rad_target"]
+    lp = spec.columns["rad_ref"]
+    return list(spec.wavelength), [panel_reflectance * t / p if p > 0 else float("nan")
+                                   for t, p in zip(lt, lp)]
 
 
 def station_key(spec):

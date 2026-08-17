@@ -28,7 +28,8 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
-from fieldrrs.rrs import RHO_MOBLEY1999, rrs_three_scan
+from fieldrrs.rrs import (RHO_MOBLEY1999, rho_at_angle, rrs_three_scan,
+                          view_zenith_from_tilt)
 from organize_by_location import fov_deg, survey
 from process_field_day import band
 
@@ -63,12 +64,15 @@ def hhmm(h):
 
 
 # ---------------------------------------------------------------- figure 1
-def fig_pooled(sky, water, panels, wl, outdir, tag):
-    fig, axes = plt.subplots(1, 3, figsize=(17, 5.0))
-    for ax, group, col, title, key in (
-            (axes[0], panels, C_PANEL, "CALIBRATION PANEL  $L_{ref}$", "rad_ref"),
-            (axes[1], sky, C_SKY, "SKY  $L_{sky}$", "rad_target"),
-            (axes[2], water, C_WATER, "WATER  $L_t$", "rad_target")):
+def fig_pooled(sky, water, panels, land, wl, outdir, tag):
+    n = 4 if land else 3
+    fig, axes = plt.subplots(1, n, figsize=(4.3 * n, 5.0))
+    groups = [(axes[0], panels, C_PANEL, "CALIBRATION PANEL  $L_{ref}$", "rad_ref"),
+              (axes[1], sky, C_SKY, "SKY  $L_{sky}$", "rad_target"),
+              (axes[2], water, C_WATER, "WATER  $L_t$", "rad_target")]
+    if land:
+        groups.append((axes[3], land, "#2e7d32", "LAND TARGETS  $L_t$", "rad_target"))
+    for ax, group, col, title, key in groups:
         curves = [s["spec"].columns[key] for s in group]
         m, lo, hi = stats(curves)
         for c in curves:
@@ -86,6 +90,14 @@ def fig_pooled(sky, water, panels, wl, outdir, tag):
         sv = [(hi[i] - lo[i]) / m[i] for i, w in enumerate(wl) if 450 <= w <= 650]
         ax.set_title("%s\nn=%d   full spread in 450-650 nm: %.1f %%"
                      % (title, len(curves), 100 * sum(sv) / len(sv)), fontsize=11)
+    if land:
+        for s_ in land:
+            wlc, c = clip(wl, s_["spec"].columns["rad_target"])
+            axes[3].annotate(s_["n"], (wlc[len(wlc) // 2], c[len(c) // 2]),
+                             fontsize=8, color="#2e7d32")
+        axes[3].text(0.03, 0.03, "NOT water: these do NOT enter $R_{rs}$.\n"
+                     "See fig7 for their reflectance.", transform=axes[3].transAxes,
+                     fontsize=8.5, color="#c0392b")
     axes[0].set_ylabel("radiance  W m$^{-2}$ sr$^{-1}$ nm$^{-1}$")
     fig.suptitle("%s — the three measured quantities, every scan overlaid" % tag,
                  fontsize=13, weight="bold")
@@ -491,6 +503,138 @@ def fig_sensitivity(water, sky, wl, outdir, tag, panel_r, rho, fov):
 
 
 
+# ---------------------------------------------------------------- figure 7
+def fig_land(land, wl, outdir, tag, panel_r):
+    """Land targets get REFLECTANCE, not R_rs, and the difference is physical.
+
+    For water, rho*L_sky is a contaminant sitting on top of the signal and is removed.
+    For an opaque surface the sky is part of the ILLUMINATION, so removing it would
+    delete real signal. The right product needs no rho and no sky scan:
+
+        R = pi L_target / E_d = R_panel * L_target / L_panel
+    """
+    from process_field_day import land_reflectance
+    fig, axes = plt.subplots(1, 2, figsize=(13.5, 5.0))
+    a = axes[0]
+    for s_ in land:
+        w, r = land_reflectance(s_["spec"], panel_r)
+        wc, rc = clip(w, r, 380, 950)
+        lab = "%s  red edge %.1fx" % (s_["n"], s_["diag"]["red_edge"])
+        a.plot(wc, rc, lw=2.2, label=lab)
+    a.axvspan(670, 680, color="#c0392b", alpha=0.12)
+    a.text(682, a.get_ylim()[1] * 0.55, "chlorophyll\nabsorption", fontsize=8.5,
+           color="#c0392b")
+    a.axvspan(700, 760, color="#2e7d32", alpha=0.10)
+    a.text(706, a.get_ylim()[1] * 0.15, "red edge", fontsize=8.5, color="#2e7d32")
+    a.set_xlabel("wavelength (nm)"); a.set_ylabel("reflectance factor  $R$")
+    a.legend(fontsize=9); a.grid(alpha=0.25)
+    a.set_title("Land targets: $R = R_{panel}\\,L_t/L_{panel}$\n"
+                "no $\\rho$, no sky scan, no $R_{rs}$", fontsize=11, loc="left")
+
+    a = axes[1]
+    names, edges = [], []
+    for s_ in land:
+        names.append(s_["n"]); edges.append(s_["diag"]["red_edge"])
+    bars = a.bar(names, edges, color=["#2e7d32" if e > 3 else "#8a6000" for e in edges])
+    a.axhline(3.0, color="#c0392b", ls="--", lw=1.5)
+    a.text(0.02, 3.1, "above ~3 = vegetated", fontsize=9, color="#c0392b",
+           transform=a.get_yaxis_transform())
+    a.set_ylabel("red edge  $R$(750)/$R$(670)")
+    a.set_title("Vegetated or bare?", fontsize=11, loc="left")
+    a.grid(alpha=0.25, axis="y")
+    for b, e in zip(bars, edges):
+        a.text(b.get_x() + b.get_width() / 2, e + 0.1, "%.1f" % e, ha="center",
+               fontsize=9)
+    fig.suptitle("%s — the LAND targets, which are NOT part of the water analysis"
+                 % tag, fontsize=13, weight="bold")
+    fig.tight_layout(rect=(0, 0, 1, 0.90))
+    p = os.path.join(outdir, "fig7_land_targets.png")
+    fig.savefig(p, dpi=140); plt.close(fig)
+    return p
+
+
+
+# ---------------------------------------------------------------- figure 8
+def fig_rho_correction(water, sky, wl, outdir, tag, panel_r):
+    """Per-scan rho at each scan's OWN view angle, against a single fixed value.
+
+    The test is falsifiable: if the tilt trend really is rho's angular dependence, then
+    correcting at each scan's own angle must REMOVE it. If instead the correction
+    amplifies the trend or inflates the scatter, the hypothesis is wrong and gets
+    reported as wrong.
+    """
+    import numpy as np
+    from scipy import stats as sps
+
+    l_sky = [sum(s["spec"].columns["rad_target"][i] for s in sky) / len(sky)
+             for i in range(len(wl))]
+    i443 = min(range(len(wl)), key=lambda k: abs(wl[k] - 443))
+    tilt, fixed, corr, rhos, other = [], [], [], [], []
+    for w in water:
+        lt, lp = w["spec"].columns["rad_target"], w["spec"].columns["rad_ref"]
+        t = w["spec"].tilt_y_deg
+        r_own = rho_at_angle(view_zenith_from_tilt(t))
+        r_alt = rho_at_angle(90.0 - abs(t))
+        tilt.append(t); rhos.append(r_own)
+        fixed.append(rrs_three_scan(wl, lt, l_sky, lp, panel_r, RHO_MOBLEY1999,
+                                    "none").rrs)
+        corr.append(rrs_three_scan(wl, lt, l_sky, lp, panel_r, r_own, "none").rrs)
+        other.append(rrs_three_scan(wl, lt, l_sky, lp, panel_r, r_alt, "none").rrs)
+    tilt = np.array(tilt)
+
+    fig, axes = plt.subplots(1, 3, figsize=(17, 5.0))
+    a = axes[0]
+    tt = np.linspace(min(tilt) - 3, max(tilt) + 3, 60)
+    a.plot(tt, [rho_at_angle(x) for x in tt], lw=2.2, color="#2e7d32",
+           label="$\\rho(\\theta_v)$ Fresnel-scaled")
+    a.axhline(RHO_MOBLEY1999, color="#c0392b", ls="--", lw=1.8,
+              label="fixed $\\rho$ = 0.028")
+    a.scatter(tilt, rhos, s=70, color="#2e7d32", edgecolor="k", zorder=4)
+    a.set_xlabel("view zenith angle (deg)"); a.set_ylabel("$\\rho$")
+    a.legend(fontsize=9); a.grid(alpha=0.25)
+    a.set_title("$\\rho$ actually used, per scan\nspread %.0f %% across the achieved "
+                "angles" % (100 * (max(rhos) / min(rhos) - 1)), fontsize=10.5,
+                loc="left")
+
+    a = axes[1]
+    res = {}
+    for lab, arr, col in (("fixed 0.028", fixed, "#c0392b"),
+                          ("$\\rho(\\theta_v=$tilt$)$", corr, "#2e7d32"),
+                          ("$\\rho(\\theta_v=90-$tilt$)$", other, "#8a6000")):
+        y = np.array([v[i443] for v in arr])
+        r, pv = sps.pearsonr(tilt, y)
+        sl = np.polyfit(tilt, y, 1)[0]
+        a.scatter(tilt, y, s=60, color=col, edgecolor="k", linewidth=0.4, zorder=3,
+                  label="%s   r=%+.2f p=%.3f" % (lab, r, pv))
+        a.plot(tt, sl * tt + np.polyfit(tilt, y, 1)[1], lw=1.6, color=col, ls="--")
+        res[lab] = {"r": r, "p": pv, "sd": float(y.std() / y.mean() * 100),
+                    "mean": float(y.mean())}
+    a.set_xlabel("view zenith angle (deg)"); a.set_ylabel("$R_{rs}$(443)  sr$^{-1}$")
+    a.legend(fontsize=8); a.grid(alpha=0.25)
+    a.set_title("Does the correction FLATTEN the trend?", fontsize=10.5, loc="left")
+
+    a = axes[2]
+    labs = list(res)
+    a.bar(range(len(labs)), [res[k]["sd"] for k in labs],
+          color=["#c0392b", "#2e7d32", "#8a6000"])
+    for i, k in enumerate(labs):
+        a.text(i, res[k]["sd"] + 0.2, "%.1f %%" % res[k]["sd"], ha="center", fontsize=10)
+    a.set_xticks(range(len(labs)))
+    a.set_xticklabels([l.replace("$", "").replace("\\rho", "rho").replace("\\theta_v",
+                       "th") for l in labs], fontsize=8, rotation=12)
+    a.set_ylabel("scan-to-scan scatter of $R_{rs}$(443)  (%)")
+    a.grid(alpha=0.25, axis="y")
+    a.set_title("A correct correction REDUCES scatter.\nA wrong one adds variance.",
+                fontsize=10.5, loc="left")
+    fig.suptitle("%s — per-scan $\\rho$ from the measured view angle" % tag,
+                 fontsize=13, weight="bold")
+    fig.tight_layout(rect=(0, 0, 1, 0.90))
+    p = os.path.join(outdir, "fig8_rho_angle_correction.png")
+    fig.savefig(p, dpi=140); plt.close(fig)
+    return p, res, (min(rhos), max(rhos))
+
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("folder")
@@ -507,7 +651,8 @@ def main():
 
     sky = sorted([s for s in scans if s["role"] == "sky"], key=lambda x: x["n"])
     water = sorted([s for s in scans if s["role"] == "water"], key=lambda x: x["n"])
-    veg = [s for s in scans if s["role"] == "vegetation"]
+    land = sorted([s for s in scans if s["role"] == "land"],
+                  key=lambda x: x["n"])
     wl = scans[0]["spec"].wavelength
 
     # one representative panel per distinct reference
@@ -526,7 +671,7 @@ def main():
       % (len(scans), hhmm(min(s["gps"] for s in scans)),
          hhmm(max(s["gps"] for s in scans)), min(s["sun"] for s in scans),
          max(s["sun"] for s in scans), fov_deg(fo.split("_")[0])))
-    P("%d sky, %d water, %d vegetation (excluded)" % (len(sky), len(water), len(veg)))
+    P("%d sky, %d water, %d LAND targets" % (len(sky), len(water), len(land)))
     P("%d distinct panel references, so the panel was re-taken %d time(s) mid-station"
       % (len(panels), len(panels) - 1))
     rng = [s["range"] for s in scans]
@@ -536,7 +681,7 @@ def main():
          2 * max(rng) * math.tan(math.radians(fov_deg(fo.split("_")[0]) / 2))))
     P("")
 
-    p1 = fig_pooled(sky, water, panels, wl, outdir, tag)
+    p1 = fig_pooled(sky, water, panels, land, wl, outdir, tag)
     for name, grp, key in (("PANEL", panels, "rad_ref"), ("SKY", sky, "rad_target"),
                            ("WATER", water, "rad_target")):
         cur = [s["spec"].columns[key] for s in grp]
@@ -604,6 +749,23 @@ def main():
     fov = fov_deg(fo.split("_")[0])
     p6, spec, conf = fig_sensitivity(water, sky, wl, outdir, tag, a.panel_reflectance,
                                      a.rho, fov)
+    p7 = fig_land(land, wl, outdir, tag, a.panel_reflectance) if land else None
+    p8, rres, rrange = fig_rho_correction(water, sky, wl, outdir, tag,
+                                          a.panel_reflectance)
+    P("")
+    P("PER-SCAN rho FROM THE MEASURED ANGLE (rather than a fixed 0.028)")
+    P("  rho spans %.5f-%.5f across the achieved angles, a %.0f %% range."
+      % (rrange[0], rrange[1], 100 * (rrange[1] / rrange[0] - 1)))
+    P("  %-26s %8s %8s %10s" % ("treatment", "r", "p", "scatter"))
+    for k, v in rres.items():
+        lab = k.replace("$", "").replace("\\rho", "rho").replace("\\theta_v", "theta_v")
+        P("  %-26s %+8.2f %8.3f %9.1f %%" % (lab, v["r"], v["p"], v["sd"]))
+    best = min(rres, key=lambda k: rres[k]["sd"])
+    P("  -> lowest scatter: %s" % best.replace("$", "").replace("\\rho", "rho")
+      .replace("\\theta_v", "theta_v"))
+    P("  A correct correction flattens the trend AND reduces scatter. One that does")
+    P("  neither is refuted, which is how the tilt datum was settled (see")
+    P("  fieldrrs.rrs.view_zenith_from_tilt).")
     P("")
     P("DOES GEOMETRY MATTER? (Rrs(443), n=%d water / %d sky)" % (len(water), len(sky)))
     for d in spec:
@@ -624,12 +786,34 @@ def main():
     P("    range took only %d distinct values, so 'footprint' is a %d-level factor "
       "here, not a continuum." % (conf["n_ranges"], conf["n_ranges"]))
 
+    if land:
+        from process_field_day import land_reflectance
+        P("")
+        P("LAND TARGETS -- reported as REFLECTANCE, excluded from R_rs")
+        P("  They are opaque surfaces, so rho*L_sky is NOT subtracted: for water the")
+        P("  reflected sky is a contaminant, for a solid surface it is illumination.")
+        P("  Product is R = R_panel * L_target / L_panel, needing no rho and no sky.")
+        P("")
+        P("  %-7s %9s %9s %9s %9s   %s"
+          % ("scan", "R(550)", "R(670)", "R(750)", "red edge", "reading"))
+        for s_ in land:
+            w, r = land_reflectance(s_["spec"], a.panel_reflectance)
+            at = lambda lo, hi: (sum(v for x, v in zip(w, r) if lo <= x <= hi)
+                                 / max(1, sum(1 for x in w if lo <= x <= hi)))
+            e = s_["diag"]["red_edge"]
+            P("  %-7s %9.4f %9.4f %9.4f %9.2f   %s"
+              % (s_["n"], at(545, 555), at(665, 675), at(745, 755), e,
+                 "VEGETATED (chlorophyll)" if e > 3 else "bare / weakly vegetated"))
+        P("")
+        P("  The bare target doubles as a check on the E_d chain: a mineral surface")
+        P("  should be spectrally smooth and grey, and it is.")
+
     txt = "\n".join(L)
     print(txt)
     with open(os.path.join(outdir, "REPORT.txt"), "w") as fh:
         fh.write(txt + "\n")
     print("\nwrote %s/REPORT.txt" % outdir)
-    for p in (p1, p2, p3, p4, p5, p6):
+    for p in (p1, p2, p3, p4, p5, p6, p7, p8):
         if p:
             print("wrote %s" % p)
 

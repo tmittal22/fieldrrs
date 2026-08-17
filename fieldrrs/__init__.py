@@ -30,19 +30,27 @@ from .rrs import (
     residual_correction,
     cross_calibration_factor,
     ed_stability,
+    fresnel_reflectance,
     integrated_irradiance,
     overcast_notes,
     par_from_ed,
+    refractive_index_water,
     rho_advice,
+    rho_at_angle,
     rrs_from_sed,
     rrs_from_separate_ed,
     rrs_three_scan,
+    view_zenith_from_tilt,
 )
 from .sed import SedSpectrum, guess_role, read_folder, read_sed
 
 __version__ = "1.0.0"
 
 __all__ = [
+    "view_zenith_from_tilt",
+    "rho_at_angle",
+    "refractive_index_water",
+    "fresnel_reflectance",
     "read_sed", "read_folder", "SedSpectrum", "guess_role",
     "rrs_from_sed", "rrs_three_scan", "residual_correction", "rho_advice",
     "average_results", "RrsResult", "RHO_MOBLEY1999", "DEFAULT_PANEL_REFLECTANCE",

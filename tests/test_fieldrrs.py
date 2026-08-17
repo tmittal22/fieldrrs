@@ -13,11 +13,15 @@ from fieldrrs import (  # noqa: E402
     bin_spectrum,
     cross_calibration_factor,
     ed_stability,
+    fresnel_reflectance,
     gaussian_resample,
     integrated_irradiance,
     overcast_notes,
     par_from_ed,
     read_sed,
+    refractive_index_water,
+    rho_at_angle,
+    view_zenith_from_tilt,
     residual_correction,
     rho_advice,
     rrs_from_sed,
@@ -1073,6 +1077,55 @@ class TestNoIrradianceReference(unittest.TestCase):
         w, s, _p, _t = synthetic_station(self.tmp, clear_water)
         res = rrs_from_sed(read_sed(w), read_sed(s), None)
         self.assertAlmostEqual(res.rrs[self.i443], self.truth, places=5)
+
+
+class TestAngleDependentRho(unittest.TestCase):
+    """rho scaled from its reference angle by the Fresnel ratio."""
+
+    def test_reduces_to_mobley_at_the_reference_angle(self):
+        self.assertAlmostEqual(rho_at_angle(40.0), RHO_MOBLEY1999, places=12)
+
+    def test_rises_monotonically_with_view_zenith(self):
+        vals = [rho_at_angle(t) for t in (30, 40, 50, 60, 70)]
+        self.assertEqual(vals, sorted(vals))
+
+    def test_a_hand_aimed_spread_moves_rho_by_tens_of_percent(self):
+        """42-50 deg is an ordinary spread; this is why a fixed rho leaks pointing
+        error straight into R_rs."""
+        self.assertGreater(rho_at_angle(50.5) / rho_at_angle(42.5) - 1.0, 0.20)
+
+    def test_fresnel_at_normal_incidence_matches_the_closed_form(self):
+        """R(0) = ((n-1)/(n+1))^2 exactly, which no fitted approximation would give."""
+        n = 1.34
+        self.assertAlmostEqual(fresnel_reflectance(0.0, n), ((n - 1) / (n + 1)) ** 2,
+                               places=12)
+
+    def test_grazing_incidence_approaches_total_reflection(self):
+        """R -> 1 only very near grazing: 0.897 at 89 deg, 0.989 at 89.9. The approach
+        is steep but not as fast as intuition suggests, which is worth pinning."""
+        self.assertGreater(fresnel_reflectance(89.9, 1.34), 0.98)
+        self.assertGreater(fresnel_reflectance(89.0, 1.34), 0.85)
+        self.assertLess(fresnel_reflectance(89.0, 1.34), 0.95)
+
+    def test_refractive_index_is_seawater_and_normally_dispersive(self):
+        n = refractive_index_water(550.0, 10.0, 30.0)
+        self.assertTrue(1.33 < n < 1.35, n)
+        self.assertGreater(refractive_index_water(450.0), refractive_index_water(650.0))
+
+    def test_view_zenith_from_tilt_is_the_magnitude(self):
+        """Settled against the LOC1 data, not assumed; see the docstring."""
+        self.assertAlmostEqual(view_zenith_from_tilt(44.4), 44.4)
+        self.assertAlmostEqual(view_zenith_from_tilt(-44.4), 44.4)
+
+    def test_correcting_at_the_wrong_datum_would_go_the_wrong_way(self):
+        """The control that makes the LOC1 result meaningful: the two candidate
+        conventions move rho in OPPOSITE directions, so the data can distinguish them."""
+        tilt = 45.0
+        right = rho_at_angle(view_zenith_from_tilt(tilt))
+        wrong = rho_at_angle(90.0 - tilt)
+        self.assertAlmostEqual(right, wrong, places=12)   # 45 is the fixed point
+        t2 = 40.0
+        self.assertLess(rho_at_angle(view_zenith_from_tilt(t2)), rho_at_angle(90.0 - t2))
 
 
 if __name__ == "__main__":
