@@ -219,6 +219,47 @@ split. If step 5 (or `--site`'s side-by-side figure) turns up a second populatio
 one of the `LOC*_FOV*` folders the loop found, stop, do the manual split described in §5,
 then re-run the loop (or just steps 3–9) on the new sub-station folders it creates.
 
+## Starting a NEW field day
+
+Nothing below this line assumes 2026-08-16 specifically — every command already takes the
+day's folder as an argument. The 2026-08-16 walkthrough above is worked through with real
+numbers so you can see what "correct" looks like; a new day follows the exact same 10
+steps with a different `$D`.
+
+1. **Copy the instrument's raw export** into `Data_NatureSpec/<new_day>/` — every `.sed`
+   (+ its `.jpg`/`.RAW` siblings) flat in that one folder, plus `HeaderLog.csv`. This flat
+   layout is what `survey_field_data.py`/`organize_by_location.py`/`make_location_map.py`
+   (steps 0–2) read directly, non-recursively — they will not find scans nested any deeper.
+2. **Run steps 0–9 exactly as in "the whole day in one block" above**, with
+   `D=Data_NatureSpec/<new_day>`. If `--site` should show a cross-sub-case summary for this
+   day too (only matters once a station has been split, §5), add an entry to the `SITES`
+   dict at the top of `make_all_spectra_figs.py` — it is intentionally a short hardcoded
+   dict, not auto-discovered, since deciding which sub-cases belong on one summary page is
+   a one-off editorial call, not something to infer from folder names.
+3. **Once `by_location/` is built and every station's `analysis/` has been checked**,
+   the flat raw archive is fully redundant with it (`organize_by_location.py` copies every
+   `.sed`/`.jpg` into `by_location/`, one real copy per scan) and can be deleted to save
+   space — this IS what was done for 2026-08-16 (10 MB freed), verified first (`diff` every
+   flat filename against `by_location/`, 0 missing) and confirmed after with a full
+   pipeline re-run showing bitwise-identical output. **Two things this breaks, both
+   recoverable but not for free:**
+   - `survey_field_data.py`/`organize_by_location.py`/`make_location_map.py` (steps 0–2)
+     can no longer be re-run for that day from within the repo, since their one input was
+     the flat folder — regenerate anything from them (especially the site map,
+     `fig1_map.png`) **before** deleting, not after. Git history still has the raw files if
+     truly needed later (`git checkout <commit before the delete> -- Data_NatureSpec/<day>`).
+   - Any test exercising real files for that day needs to read `by_location/` instead. See
+     `tests/test_field_day.py`'s `REAL_BACKING_STORES`, written for 2026-08-16's specific
+     layout (LOC1, LOC2's pre-split folder, LOC3's two foreoptics — the 4 real,
+     non-symlinked copies, chosen to reconstitute all 60 original scans with none double-
+     counted through a split's symlinks). A new day's equivalent test class would need its
+     own list, built the same way: the real (non-symlink) `by_location/` folders for that
+     day, not the split-off station folders that symlink into them.
+   - If disk space isn't a concern, **keeping the flat archive alongside `by_location/` is
+     also completely fine** — nothing breaks either way, and it keeps steps 0–2 re-runnable
+     for that day indefinitely. Deleting it is an optional space/reproducibility trade, not
+     a required step.
+
 ## Status, 2026-08-17
 
 | location | scans | foreoptic | steps 0–6 | GIOP | notes |
