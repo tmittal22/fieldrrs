@@ -36,8 +36,8 @@ as ~40 % below the fixed-shape values, and do not quote chlorophyll.**
 > Weighting by exp(−Δχ²/2ŝ) with errors inflated so the best arm has χ²_ν = 1
 > (Avni 1976 — the standard treatment when misfit is model inadequacy, not noise) still
 > puts **w = 1.000 on one arm and 0.000 on the other 23**. The gap to the next arm is
-> Δχ²_ν = 1.9 — which sounds small, but over 298 dof that is Δχ² = 566, and the gap to
-> the best *fixed-shape* arm is Δχ² = 15 500. The sweep is not an uncertainty band.
+> Δχ²_ν = 1.9 — which sounds small, but over 298 dof that is Δχ² = 544, and the gap to
+> the best *fixed-shape* arm is Δχ² = 15 468. The sweep is not an uncertainty band.
 > Cutting instead at a stated χ²_ν ≤ 2 × best (2 arms of 24 survive):
 >
 > | | unweighted range, as first reported | **admissible only** |
