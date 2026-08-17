@@ -249,13 +249,70 @@ def f_sdg(wl, mean, chl, out):
     return p
 
 
+def f_perscan(loc, chl, out):
+    """GIOP on EVERY angle-matched scan, not only the mean.
+
+    The mean shape is the product, but each scan is an independent realisation of the
+    same water at a different concentration, so fitting all twelve shows how much of the
+    retrieved IOP spread is the amplitude term and how much is anything else.
+    """
+    from analyse_location import match_by_angle
+    from fieldrrs.rrs import rho_at_angle, rrs_three_scan, view_zenith_from_tilt
+    from organize_by_location import survey
+    scans = survey(loc)
+    sky = [s for s in scans if s["role"] == "sky"]
+    water = [s for s in scans if s["role"] == "water"]
+    wl = np.array(scans[0]["spec"].wavelength)
+    m = (wl >= LO) & (wl <= HI)
+    rows = []
+    for w, sk, dm, _ in match_by_angle(water, sky):
+        r = rho_at_angle(view_zenith_from_tilt(w["spec"].tilt_y_deg))
+        v = np.array(rrs_three_scan(wl, w["spec"].columns["rad_target"],
+                                    sk["spec"].columns["rad_target"],
+                                    w["spec"].columns["rad_ref"], 0.99, r,
+                                    "none").rrs)
+        try:
+            g = run(wl[m], v[m], chl)
+            rows.append({"n": w["n"], "sky": sk["n"], "dm": dm, "M": g.chl,
+                         "adg": g.adg443, "bbp": g.bbp443,
+                         "r555": float(v[np.argmin(abs(wl - 555))]), "ok": not g.failed})
+        except Exception:
+            rows.append({"n": w["n"], "sky": sk["n"], "dm": dm, "M": np.nan,
+                         "adg": np.nan, "bbp": np.nan, "r555": np.nan, "ok": False})
+    good = [r for r in rows if r["ok"]]
+    fig, axes = plt.subplots(1, 3, figsize=(16, 5.0))
+    names = [r["n"] for r in good]
+    for ax, k, t, col in ((axes[0], "M", "$M_\\phi$", "#2e7d32"),
+                          (axes[1], "adg", "$a_{dg}$(443)  m$^{-1}$", "#8a6000"),
+                          (axes[2], "bbp", "$b_{bp}$(443)  m$^{-1}$", "#2c6f9b")):
+        v = np.array([r[k] for r in good])
+        ax.bar(range(len(v)), v, color=col)
+        ax.axhline(v.mean(), color="k", ls="--", lw=1.5)
+        ax.set_xticks(range(len(v)))
+        ax.set_xticklabels(["%s/%s" % (r["n"], r["sky"]) for r in good], rotation=70,
+                           fontsize=7)
+        ax.set_ylabel(t); ax.grid(alpha=0.25, axis="y")
+        ax.set_title("%s per scan\nmean %.4g, sd %.0f %%"
+                     % (t, v.mean(), 100 * v.std() / abs(v.mean())), fontsize=10.5,
+                     loc="left")
+    fig.suptitle("GIOP on each angle-matched water/sky pair (hyperspectral 400-700 nm)"
+                 " — labels are water/sky", fontsize=12)
+    fig.tight_layout(rect=(0, 0, 1, 0.90))
+    p = os.path.join(out, "giop6_per_scan.png")
+    fig.savefig(p, dpi=140); plt.close(fig)
+    return p, rows
+
+
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("csv")
-    ap.add_argument("--out", default=".")
+    ap.add_argument("location", help="by_location/LOC*/FOREOPTIC_FOVxx")
+    ap.add_argument("--out", default=None)
     a = ap.parse_args()
+    loc = a.location.rstrip("/")
+    a.out = a.out or os.path.join(loc, "analysis", "GIOP")
     os.makedirs(a.out, exist_ok=True)
-    wl, mean, ssd = load(a.csv)
+    csv_path = os.path.join(loc, "analysis", "FINAL_Rrs.csv")
+    wl, mean, ssd = load(csv_path)
     r4 = at(wl, mean, np.array([443., 490, 510, 555]))
     chl = float(get_oc(r4[0], r4[1], r4[2], r4[3], "oc4"))
     ps = []
@@ -264,6 +321,14 @@ def main():
     ps.append(f_fit(wl, mean, chl, a.out))
     p, store = f_uncertainty(wl, mean, ssd, chl, a.out); ps.append(p)
     ps.append(f_sdg(wl, mean, chl, a.out))
+    p, per = f_perscan(loc, chl, a.out); ps.append(p)
+    # the explainer infographic belongs with the fits it explains
+    import shutil
+    src = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "giop_python",
+                       "GIOP_explainer.png")
+    if os.path.exists(src):
+        shutil.copy2(src, os.path.join(a.out, "giop0_explainer.png"))
+        ps.insert(0, os.path.join(a.out, "giop0_explainer.png"))
     print("OC4: X=%.4f (numerator band %d nm) -> chl = %.2f mg m^-3" % (X, which, chl2))
     print("\nband choice:")
     for lab, n, c, adg, bbp, ok in res:
@@ -276,6 +341,21 @@ def main():
               % (lab, 100 * v[:, 0].std() / abs(v[:, 0].mean()),
                  100 * v[:, 1].std() / abs(v[:, 1].mean()),
                  100 * v[:, 2].std() / abs(v[:, 2].mean())))
+    good = [r for r in per if r["ok"]]
+    print("\nper-scan (angle-matched pairs), hyperspectral:")
+    print("   %-7s %-6s %6s %10s %10s %10s" % ("water", "sky", "dtilt", "M_phi",
+                                               "adg443", "bbp443"))
+    for r in good:
+        print("   %-7s %-6s %6.1f %10.3f %10.3f %10.4f"
+              % (r["n"], r["sky"], r["dm"], r["M"], r["adg"], r["bbp"]))
+    for k, t in (("M", "M_phi"), ("adg", "adg443"), ("bbp", "bbp443")):
+        v = np.array([r[k] for r in good])
+        print("   %-8s across scans: %.4g +/- %.0f %%" % (t, v.mean(),
+                                                          100 * v.std() / abs(v.mean())))
+    with open(os.path.join(a.out, "giop_per_scan.csv"), "w", newline="") as fh:
+        w = csv.DictWriter(fh, fieldnames=list(per[0]))
+        w.writeheader(); w.writerows(per)
+    print("\nwrote %s/giop_per_scan.csv" % a.out)
     for p in ps:
         print("wrote %s" % p)
 
