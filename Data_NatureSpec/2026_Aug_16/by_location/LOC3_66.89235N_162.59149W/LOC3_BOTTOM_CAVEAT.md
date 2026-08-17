@@ -17,6 +17,29 @@ separate them. This is a structurally different problem from anything else in th
 dataset — turbidity, glint, and disturbed sediment (LOC2) are all still water-column
 effects; bottom reflectance is not.
 
+## Update, 2026-08-18: confirmed independently, in the raw radiance, not just the photos
+
+Overplotting every validated station's R_rs (`COMPARISON/all_stations_overplot.png`)
+made the difference impossible to miss: **LOC1 and LOC2 collapse smoothly toward zero
+past ~700 nm, the way deep, optically clean water must** (pure water absorption is
+strong and rises steeply through the NIR). **LOC3's spectra do not — they show a
+second, distinct peak near 805–810 nm** and retain substantial signal out to 900 nm.
+
+Checked directly against the RAW target radiance (`rad_target`, before any R_rs
+processing) so this cannot be an artefact of E_d, ρ, or the panel chain:
+
+| | L(700) | L(810) | **L(810)/L(700)** |
+|---|---|---|---|
+| LOC1 | 0.00383 | 0.00087 | **0.226** |
+| LOC3-FLENS8 | 0.00897 | 0.00373 | **0.416** |
+
+LOC3 reflects nearly **twice as much at 810 nm relative to 700 nm** as LOC1 does, in the
+sensor's own raw measurement. A sand/rock/algae substrate is far more NIR-reflective
+than water; deep water alone cannot produce this. This is now the strongest single piece
+of evidence for the bottom-reflectance hypothesis in the dataset — independent of, and
+more decisive than, the photographic evidence above — and it applies to LOC3 broadly,
+not only to the scans flagged for other reasons.
+
 ## What this does and does not explain
 
 - **It is consistent with, and a more complete explanation than, the "different water
