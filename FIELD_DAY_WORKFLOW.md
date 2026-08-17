@@ -142,8 +142,19 @@ done
 | location | scans | foreoptic | steps 0–5 | GIOP |
 |---|---|---|---|---|
 | **LOC1** 66.89718 N 162.60290 W | 22 | FLENS8 (8°) | **done** | **done** |
-| LOC2 | 23 | FLENS8 (8°) | not run | not run |
+| **LOC2** 66.89677 N 162.57953 W | 23 | FLENS8 (8°) | **done, split into 2a/2b/2c** | LOC2a/2b pending |
 | LOC3 | 32 | FIBR15 (15°) **and** FLENS8 (8°) | not run | not run |
+
+**LOC2 is not one water population** — `analyse_water_scans.py` found 3 of its 12 water
+scans (00027–29) are physically different water (disturbed sediment, settling over
+~2 min at station start, not an AC/geometry artefact), and 2 more scans classified
+"land" are a floating algae mat, not open water or dry ground. Split into
+`LOC2a_.../` (9 scans, main open water), `LOC2b_.../` (3 scans, the disturbed water,
+its own valid station), `LOC2c_.../` (2 scans, algae reflectance) — full reasoning and
+evidence in `Data_NatureSpec/2026_Aug_16/by_location/LOC2_SPLIT.md`, one water scan's
+individual glint disposition in `LOC2a_.../analysis/water_scans/SCAN_00035_GLINT.md`,
+and the LOC1/2a/2b/2c comparison in
+`Data_NatureSpec/2026_Aug_16/by_location/COMPARISON/loc1_loc2abc_overplot.png`.
 
 LOC3 is the controlled FOV comparison — same water, two foreoptics — and is the only
 place in the dataset where the footprint question can be answered properly. At LOC1 range

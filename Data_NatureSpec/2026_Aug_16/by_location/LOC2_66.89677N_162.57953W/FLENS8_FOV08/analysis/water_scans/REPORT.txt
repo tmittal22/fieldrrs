@@ -1,0 +1,38 @@
+==============================================================================
+PER-SCAN WATER QC  ·  LOC2_66.89677N_162.57953W  ·  FLENS8_FOV08
+==============================================================================
+12 water, 9 sky. Nothing is averaged until the scans are shown to be one
+population, because a 'spread' over different targets is not an uncertainty.
+
+IS IT ONE POPULATION?
+  main group: 8 scans, internal shape spread 1.43 deg
+  deviant   : 00027, 00028, 00029, 00035
+
+THE COLLAPSE TEST -- glint is additive, so a NIR correction must remove it
+  method              main spread 00027   00028   00029   00035
+  none                      1.93     3.54     3.36     3.42     3.16
+  nir_zero                  1.81     3.08     3.07     2.55     1.98
+  nir_similarity            1.51     2.82     2.73     2.47     1.53
+
+VERDICT PER SCAN
+  scan    sky    theta     Rrs555  700/675  412/555   NIRrat      ang  verdict
+  00027   00022    47.1   0.01063     1.03    0.325     1.64     3.54  deviant, NOT glint
+  00028   00023    47.5   0.01067     1.03    0.321     1.64     3.36  deviant, NOT glint
+  00029   00042    45.8   0.01073     1.04    0.317     1.62     3.42  deviant, NOT glint
+  00030   00042    45.3   0.01058     1.04    0.242     1.74     1.01  clean
+  00031   00042    45.2   0.01023     1.02    0.235     1.88     0.91  clean
+  00032   00042    45.5   0.01113     1.04    0.222     1.75     1.00  clean
+  00033   00042    45.2   0.01121     1.04    0.241     1.67     1.20  clean
+  00034   00042    44.1   0.01058     1.01    0.237     1.78     0.92  clean
+  00035   00042    42.7   0.01125     1.07    0.261     1.52     3.16  glint (correctable)
+  00036   00042    45.2   0.01088     1.00    0.255     1.71     0.85  clean
+  00037   00042    45.0   0.01080     1.00    0.240     1.85     0.94  clean
+  00038   00042    43.2   0.01074     1.01    0.207     1.84     1.27  clean
+
+WHAT IS THE NON-GLINT DIFFERENCE MADE OF?  (00027, 00028, 00029 vs the main group)
+  sky reflection (rho error)               angle  46.45 deg   removes  27.5 %
+  flat offset (what NIR methods remove)    angle  75.75 deg   removes   3.1 %
+  chlorophyll (Gaussian at 675 nm)         angle  95.49 deg   removes   0.5 %
+  A partial removal means the difference is not one clean thing.
+
+Ruddick et al. (2006) NIR similarity ratio for pure-water residual: 1.912

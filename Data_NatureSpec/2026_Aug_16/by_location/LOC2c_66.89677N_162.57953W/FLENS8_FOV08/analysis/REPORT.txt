@@ -1,0 +1,8 @@
+LOC2c -- floating algae mat, LOC2c_66.89677N_162.57953W  ·  FLENS8_FOV08
+2 scans, classified 'land' by spectral shape (see module docstring for what that means here).
+
+00043  R(550)=0.0361  R(670)=0.0240  R(750)=0.0458  red-edge=1.89x (from R, not classify()'s raw-radiance diagnostic)
+00044  R(550)=0.0375  R(670)=0.0293  R(750)=0.0686  red-edge=2.32x (from R, not classify()'s raw-radiance diagnostic)
+
+Reflectance, NOT R_rs. See module docstring for why an opaque-
+target treatment was used and its limits.

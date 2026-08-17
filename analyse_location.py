@@ -546,6 +546,8 @@ def fig_sensitivity(water, sky, wl, outdir, tag, panel_r, rho, fov):
     for w in water:
         r = rrs_three_scan(wl, w["spec"].columns["rad_target"], l_sky_mean,
                            w["spec"].columns["rad_ref"], panel_r, rho, "none").rrs
+        if w["range"] is None:
+            continue          # no range in this header -> no footprint for this scan
         fp = 2 * w["range"] * math.tan(math.radians(fov / 2.0))
         rows.append({"tilt": w["spec"].tilt_y_deg, "range": w["range"],
                      "fp": fp, "r443": r[i443], "r555": r[i555], "n": w["n"],
@@ -815,9 +817,12 @@ def fig_variability(water, sky, wl, outdir, tag, panel_r, panels):
                 fontsize=10, loc="left")
 
     a = axes[1]
-    a.bar(range(1, 6), 100 * var[:5], color="#2c6f9b")
+    # min(5, len(var)): the SVD of n spectra yields at most n modes, and a station with
+    # fewer than 5 water scans is normal (LOC3 has 4).
+    kmode = min(5, len(var))
+    a.bar(range(1, kmode + 1), 100 * var[:kmode], color="#2c6f9b")
     a.set_xlabel("SVD mode"); a.set_ylabel("variance explained (%)")
-    a.set_xticks(range(1, 6)); a.grid(alpha=0.25, axis="y")
+    a.set_xticks(range(1, kmode + 1)); a.grid(alpha=0.25, axis="y")
     a.set_title("One mode carries %.1f %%\n"
                 "coherent, as a load change is; noise\nwould spread across modes"
                 % (100 * var[0]), fontsize=10, loc="left")
@@ -1369,6 +1374,12 @@ def main():
     ap.add_argument("folder")
     ap.add_argument("--rho", type=float, default=RHO_MOBLEY1999)
     ap.add_argument("--panel-reflectance", type=float, default=0.99)
+    ap.add_argument("--exclude-water", nargs="*", default=[], metavar="SCAN",
+                    help="water scan numbers (e.g. 00027) to drop before forming the "
+                         "final mean -- for a station where analyse_water_scans.py has "
+                         "shown the water is not one population. The excluded scans are "
+                         "still shown in fig1/fig4/fig9 (so the exclusion is visible, "
+                         "not silent) but are NOT averaged into FINAL_Rrs.csv.")
     a = ap.parse_args()
 
     scans = survey(a.folder)
@@ -1406,11 +1417,16 @@ def main():
       % span_m)
     P("%d distinct panel references, so the panel was re-taken %d time(s) mid-station"
       % (len(panels), len(panels) - 1))
-    rng = [s["range"] for s in scans]
-    P("range %.3f-%.3f m -> footprint %.2f-%.2f m across (2 R tan(FOV/2))"
-      % (min(rng), max(rng),
-         2 * min(rng) * math.tan(math.radians(fov_deg(fo.split("_")[0]) / 2)),
-         2 * max(rng) * math.tan(math.radians(fov_deg(fo.split("_")[0]) / 2))))
+    rng = [s["range"] for s in scans if s["range"] is not None]
+    nmiss = len(scans) - len(rng)
+    if rng:
+        P("range %.3f-%.3f m -> footprint %.2f-%.2f m across (2 R tan(FOV/2))%s"
+          % (min(rng), max(rng),
+             2 * min(rng) * math.tan(math.radians(fov_deg(fo.split("_")[0]) / 2)),
+             2 * max(rng) * math.tan(math.radians(fov_deg(fo.split("_")[0]) / 2)),
+             "   [%d scan(s) carry NO range in the header]" % nmiss if nmiss else ""))
+    else:
+        P("range: NOT RECORDED in any header, so footprint cannot be computed")
     P("")
 
     p1 = fig_pooled(sky, water, panels, land, wl, outdir, tag)
@@ -1450,6 +1466,27 @@ def main():
                    else "SUSPECT, inspect fig3")
         P("  VERDICT: %s" % verdict)
         P("")
+
+    excl = set(a.exclude_water)
+    water_clean = [w for w in water if w["n"] not in excl]
+    if excl:
+        found = {w["n"] for w in water} & excl
+        missing = excl - found
+        P("EXCLUDED FROM THE FINAL PRODUCT (--exclude-water)")
+        P("  %s -- see analysis/water_scans/REPORT.txt for why (run "
+          "analyse_water_scans.py first)." % ", ".join(sorted(found)))
+        if missing:
+            P("  ⚠ requested but not found among this station's water scans: %s"
+              % ", ".join(sorted(missing)))
+        P("  %d of %d water scans remain for FINAL_Rrs.csv."
+          % (len(water_clean), len(water)))
+        P("  Figures 1/4/5/6/9/13 below still show ALL %d scans (the exclusion is not "
+          "silent); figures 10/11/12 and FINAL_Rrs.csv use only the %d clean ones."
+          % (len(water), len(water_clean)))
+        P("")
+        if not water_clean:
+            raise SystemExit("--exclude-water removed every water scan; nothing left "
+                             "to form a final spectrum from")
 
     p4, r = fig_rrs(water, sky, wl, outdir, tag, a.panel_reflectance, a.rho)
     P("R_rs RESULT  (angle-matched pairing, per-scan rho)")
@@ -1508,9 +1545,9 @@ def main():
     p8, rres, rrange = fig_rho_correction(water, sky, wl, outdir, tag,
                                           a.panel_reflectance)
     p9, vv = fig_variability(water, sky, wl, outdir, tag, a.panel_reflectance, panels)
-    p10, fcsv, fp = fig_final(water, sky, wl, outdir, tag, a.panel_reflectance)
-    p11 = fig_scaled_method(water, sky, wl, outdir, tag, a.panel_reflectance)
-    p12 = fig_final_mean(water, sky, wl, outdir, tag, a.panel_reflectance)
+    p10, fcsv, fp = fig_final(water_clean, sky, wl, outdir, tag, a.panel_reflectance)
+    p11 = fig_scaled_method(water_clean, sky, wl, outdir, tag, a.panel_reflectance)
+    p12 = fig_final_mean(water_clean, sky, wl, outdir, tag, a.panel_reflectance)
     P("")
     P("WHAT IS THE REMAINING SPREAD?  measurement error, or real water?")
     P("  SVD mode 1 carries          %5.1f %%   coherent; noise would spread out" % vv["pc1"])

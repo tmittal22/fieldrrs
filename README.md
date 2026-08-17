@@ -341,6 +341,8 @@ command, what it writes, and what to look at.
 | `make_interactive_report.py` | the same as zoomable plotly, `REPORT.html` |
 | `make_giop_figures.py` | the GIOP inversion of that spectrum, 10 figures + 2 CSVs |
 | `analysis_solar_window.py` | the 30–60° solar window, computed rather than adopted |
+| `analyse_water_scans.py` | per-scan QC when the water may NOT be one population: shape-angle clustering, a falsifiable glint collapse test (Ruddick et al. 2006), and photo contact sheets |
+| `analyse_algae_mat.py` | opaque-target reflectance for a floating vegetation/algae target — a different physical quantity from R_rs |
 | `make_field_card.py`, `make_theory_pdf.py` | the printable field card and the theory PDF |
 
 Theory notes: **[`THEORY_SCALED_MEAN.md`](THEORY_SCALED_MEAN.md)** (how the final spectrum
