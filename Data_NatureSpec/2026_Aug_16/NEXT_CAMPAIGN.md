@@ -52,6 +52,14 @@ sky state too (clear / uniform overcast / broken).
 
 *Cost:* 30 seconds per station.
 
+**If you forget anyway, it may not be lost.** This session recovered real historical wind
+for every 2026-08-16 station after the fact from Kotzebue airport's public ASOS archive
+(`RHO_METHODOLOGY_REVIEW.md`) — free, no equipment, works for any site within reach of an
+airport METAR/ASOS station (most coastal sites). It only works because the exact UTC
+timestamp was already recorded (the instrument does this automatically). This is a
+fallback for a missed reading, not a substitute for one — it can't tell you gusts or
+local shielding an anemometer would catch.
+
 ---
 
 ## Tier 2 — changes that would have made this dataset cleaner
