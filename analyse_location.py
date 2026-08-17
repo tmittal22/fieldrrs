@@ -18,6 +18,7 @@ choice was worth. Computing every pairing makes it explicit.
 """
 
 import argparse
+import csv
 import math
 import os
 import sys
@@ -29,7 +30,7 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
 from fieldrrs.rrs import (RHO_MOBLEY1999, rho_at_angle, rrs_three_scan,
-                          view_zenith_from_tilt)
+                          scaled_mean, view_zenith_from_tilt)
 from organize_by_location import fov_deg, survey
 from process_field_day import band
 
@@ -847,6 +848,109 @@ def fig_variability(water, sky, wl, outdir, tag, panel_r, panels):
 
 
 
+# --------------------------------------------------------------- figure 10
+def fig_final(water, sky, wl, outdir, tag, panel_r):
+    """THE PRODUCT: a clean mean shape, with amplitude reported separately.
+
+    92 % of the scan-to-scan variance at this site is a multiplicative factor -- the
+    same water with more or less material in it. A plain average lets that leak into
+    every band, so the mean looks less certain than the shape actually is.
+    `scaled_mean` alternates fitting a per-scan amplitude and re-meaning, which splits
+    the result into the two things that are genuinely different:
+
+        SHAPE      what the water is        -- small uncertainty, this is the product
+        AMPLITUDE  how much of it there is  -- large, and REAL, not error
+
+    Quoting one combined error bar would imply the water type is uncertain when only
+    its concentration is.
+    """
+    import numpy as np
+    pairs = match_by_angle(water, sky)
+    R, names = [], []
+    for w, sk, _, _ in pairs:
+        r = rho_at_angle(view_zenith_from_tilt(w["spec"].tilt_y_deg))
+        R.append(rrs_three_scan(wl, w["spec"].columns["rad_target"],
+                                sk["spec"].columns["rad_target"],
+                                w["spec"].columns["rad_ref"], panel_r, r, "none").rrs)
+        names.append(w["n"])
+    wl_a = np.array(wl)
+    m = (wl_a >= RLO) & (wl_a <= RHI)
+    X = [list(np.array(r)[m]) for r in R]
+    lam = wl_a[m]
+    mean, scales, iters, shape_cv, amp_cv = scaled_mean(X)
+    mean = np.array(mean)
+    plain = np.array(X).mean(0)
+    plain_cv = float(np.mean(np.array(X).std(0) / np.abs(plain)) * 100)
+    # A RELATIVE scatter is meaningless where the signal approaches zero, and R_rs does
+    # exactly that below ~430 and above ~800 nm. Quote the shape over the core band and
+    # over the bands carrying real signal, not over the noise tails.
+    Xs_ = np.array([[sc_ * v for v in x] for sc_, x in zip(scales, X)])
+    core = (lam >= 450) & (lam <= 700)
+    shape_core = float(np.mean(Xs_.std(0)[core] / np.abs(mean[core])) * 100)
+    plain_core = float(np.mean(np.array(X).std(0)[core] / np.abs(plain[core])) * 100)
+
+    fig, axes = plt.subplots(1, 3, figsize=(17, 5.0))
+    a = axes[0]
+    for x in X:
+        a.plot(lam, x, lw=0.8, alpha=0.45, color=C_WATER)
+    a.plot(lam, plain, lw=2.0, color="#888", ls="--",
+           label="plain mean   band scatter %.1f %%" % plain_cv)
+    a.plot(lam, mean, lw=3.0, color="#2e7d32",
+           label="scaled mean   shape %.1f %% (450-700 nm)" % shape_core)
+    a.axvspan(450, 700, color="#2e7d32", alpha=0.06)
+    sd = np.array(X).std(0)
+    a.fill_between(lam, plain - sd, plain + sd, color="#bbb", alpha=0.4)
+    a.set_ylabel("$R_{rs}$  sr$^{-1}$"); a.legend(fontsize=9)
+    a.set_title("The product: mean $R_{rs}$\ngrey band = plain 1 sd, which is mostly "
+                "amplitude", fontsize=10.5, loc="left")
+
+    a = axes[1]
+    Xs = np.array([[sc * v for v in x] for sc, x in zip(scales, X)])
+    for row in Xs:
+        a.plot(lam, row, lw=0.9, alpha=0.6, color="#2e7d32")
+    a.plot(lam, mean, lw=3.0, color="k")
+    rel = Xs.std(0) / np.abs(mean) * 100
+    a.set_ylabel("$R_{rs}$ rescaled  sr$^{-1}$")
+    a.axvspan(450, 700, color="#2e7d32", alpha=0.06)
+    a.set_title("After scaling each scan onto the mean\n"
+                "450-700 nm: %.1f %% residual, was %.1f %%\n"
+                "(%.1f %% over 400-900, inflated by the near-zero tails)"
+                % (shape_core, plain_core, shape_cv), fontsize=10, loc="left")
+
+    a = axes[2]
+    amp = [1.0 / s_ for s_ in scales]
+    a.bar(range(len(amp)), amp, color=C_WATER)
+    a.axhline(1.0, color="k", lw=1.4)
+    a.set_xticks(range(len(amp))); a.set_xticklabels(names, rotation=60, fontsize=7.5)
+    a.set_ylabel("amplitude relative to the mean")
+    a.set_title("Amplitude per scan: %.0f %% (1 sd), range %.2f-%.2f\n"
+                "REAL variability in load, not measurement error"
+                % (amp_cv, min(amp), max(amp)), fontsize=10.5, loc="left")
+    for a_ in axes[:2]:
+        a_.set_xlabel("wavelength (nm)"); a_.grid(alpha=0.25); a_.set_xlim(RLO, RHI)
+    axes[2].grid(alpha=0.25, axis="y")
+    fig.suptitle("%s — FINAL PRODUCT: shape and amplitude reported separately" % tag,
+                 fontsize=13, weight="bold")
+    fig.tight_layout(rect=(0, 0, 1, 0.90))
+    pth = os.path.join(outdir, "fig10_final_product.png")
+    fig.savefig(pth, dpi=140); plt.close(fig)
+
+    csv_path = os.path.join(outdir, "FINAL_Rrs.csv")
+    with open(csv_path, "w", newline="") as fh:
+        wcsv = csv.writer(fh)
+        wcsv.writerow(["# scaled-mean R_rs; shape_cv_pct=%.3f amp_cv_pct=%.2f n=%d"
+                       % (shape_cv, amp_cv, len(X))])
+        wcsv.writerow(["wavelength_nm", "Rrs_mean", "shape_sd", "plain_sd"])
+        for i, lm in enumerate(lam):
+            wcsv.writerow(["%.1f" % lm, "%.8e" % mean[i], "%.8e" % Xs.std(0)[i],
+                           "%.8e" % sd[i]])
+    return pth, csv_path, {"shape_cv": shape_cv, "amp_cv": amp_cv, "plain_cv": plain_cv,
+                           "shape_core": shape_core, "plain_core": plain_core,
+                           "iters": iters, "amp": amp, "names": names,
+                           "gain": plain_core / shape_core}
+
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("folder")
@@ -991,6 +1095,7 @@ def main():
     p8, rres, rrange = fig_rho_correction(water, sky, wl, outdir, tag,
                                           a.panel_reflectance)
     p9, vv = fig_variability(water, sky, wl, outdir, tag, a.panel_reflectance, panels)
+    p10, fcsv, fp = fig_final(water, sky, wl, outdir, tag, a.panel_reflectance)
     P("")
     P("WHAT IS THE REMAINING SPREAD?  measurement error, or real water?")
     P("  SVD mode 1 carries          %5.1f %%   coherent; noise would spread out" % vv["pc1"])
@@ -1017,6 +1122,38 @@ def main():
     P("  here (%.1f %% vs %.1f %%), so ratio-based products should be quoted with more"
       % (vv["nor"], vv["raw"]))
     P("  confidence than absolute magnitudes at this site.")
+    P("")
+    P("=" * 78)
+    P("FINAL PRODUCT  (fig10, FINAL_Rrs.csv)")
+    P("=" * 78)
+    P("  Iterative amplitude-normalised mean, converged in %d iterations." % fp["iters"])
+    P("  Each scan is scaled onto the running mean, then the mean is re-formed, which")
+    P("  separates the two things that are genuinely different:")
+    P("")
+    P("    SHAPE      %5.1f %% over 450-700 nm   <- what the water IS. The product."
+      % fp["shape_core"])
+    P("    AMPLITUDE  %5.1f %%                    <- how MUCH there is. Real, not error."
+      % fp["amp_cv"])
+    P("    (a plain average blends them into one %.1f %% band)" % fp["plain_core"])
+    P("")
+    P("  Over the full 400-900 nm the shape figure is %.1f %%, but a RELATIVE scatter is"
+      % fp["shape_cv"])
+    P("  meaningless where R_rs approaches zero, which it does below 430 and above 800.")
+    P("  The mean SHAPE is %.0fx better determined than a plain average suggests."
+      % fp["gain"])
+    P("  Per-scan amplitude relative to the mean:")
+    row = "    "
+    for n_, v_ in zip(fp["names"], fp["amp"]):
+        row += "%s %.2f  " % (n_, v_)
+        if len(row) > 68:
+            P(row); row = "    "
+    if row.strip():
+        P(row)
+    P("")
+    P("  Quote it as: R_rs = (shape, +/- %.1f %%) x (amplitude, %.0f %% 1 sd across the"
+      % (fp["shape_core"], fp["amp_cv"]))
+    P("  station). One combined error bar would imply the water TYPE is uncertain when")
+    P("  only its CONCENTRATION is.")
     P("")
     P("PER-SCAN rho FROM THE MEASURED ANGLE (rather than a fixed 0.028)")
     P("  rho spans %.5f-%.5f across the achieved angles, a %.0f %% range."
@@ -1078,7 +1215,8 @@ def main():
     with open(os.path.join(outdir, "REPORT.txt"), "w") as fh:
         fh.write(txt + "\n")
     print("\nwrote %s/REPORT.txt" % outdir)
-    for p in (p1, p2, p3, p4, p5, p6, p7, p8, p9):
+    print("wrote %s" % fcsv)
+    for p in (p1, p2, p3, p4, p5, p6, p7, p8, p9, p10):
         if p:
             print("wrote %s" % p)
 

@@ -70,6 +70,28 @@ WHAT IS THE REMAINING SPREAD?  measurement error, or real water?
   here (3.2 % vs 11.2 %), so ratio-based products should be quoted with more
   confidence than absolute magnitudes at this site.
 
+==============================================================================
+FINAL PRODUCT  (fig10, FINAL_Rrs.csv)
+==============================================================================
+  Iterative amplitude-normalised mean, converged in 4 iterations.
+  Each scan is scaled onto the running mean, then the mean is re-formed, which
+  separates the two things that are genuinely different:
+
+    SHAPE        1.7 % over 450-700 nm   <- what the water IS. The product.
+    AMPLITUDE   11.4 %                    <- how MUCH there is. Real, not error.
+    (a plain average blends them into one 11.7 % band)
+
+  Over the full 400-900 nm the shape figure is 7.1 %, but a RELATIVE scatter is
+  meaningless where R_rs approaches zero, which it does below 430 and above 800.
+  The mean SHAPE is 7x better determined than a plain average suggests.
+  Per-scan amplitude relative to the mean:
+    00001 1.02  00005 0.81  00006 1.06  00007 1.01  00008 0.81  00011 0.99  
+    00012 0.91  00013 1.06  00016 1.13  00017 1.15  00018 1.18  00019 1.04  
+
+  Quote it as: R_rs = (shape, +/- 1.7 %) x (amplitude, 11 % 1 sd across the
+  station). One combined error bar would imply the water TYPE is uncertain when
+  only its CONCENTRATION is.
+
 PER-SCAN rho FROM THE MEASURED ANGLE (rather than a fixed 0.028)
   rho spans 0.02772-0.03463 across the achieved angles, a 25 % range.
   treatment                         r        p    scatter

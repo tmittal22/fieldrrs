@@ -40,6 +40,7 @@ from .rrs import (
     rrs_from_sed,
     rrs_from_separate_ed,
     rrs_three_scan,
+    scaled_mean,
     view_zenith_from_tilt,
 )
 from .sed import SedSpectrum, guess_role, read_folder, read_sed
@@ -47,6 +48,7 @@ from .sed import SedSpectrum, guess_role, read_folder, read_sed
 __version__ = "1.0.0"
 
 __all__ = [
+    "scaled_mean",
     "view_zenith_from_tilt",
     "rho_at_angle",
     "refractive_index_water",

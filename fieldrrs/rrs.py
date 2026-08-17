@@ -19,6 +19,7 @@ from __future__ import annotations
 import math
 
 __all__ = [
+    "scaled_mean",
     "refractive_index_water", "fresnel_reflectance", "rho_at_angle",
     "view_zenith_from_tilt",
     "RHO_MOBLEY1999", "SIMILARITY_780_870", "RrsResult",
@@ -151,6 +152,79 @@ def view_zenith_from_tilt(tilt_y_deg):
     the sky scans sit 44-50 deg from ZENITH.
     """
     return abs(float(tilt_y_deg))
+
+
+def scaled_mean(spectra, iterations=25, tol=1e-12, weight=None):
+    """Iterative amplitude-normalised mean: a clean SHAPE plus per-scan amplitudes.
+
+    When replicate spectra differ mostly by a multiplicative factor -- which is what a
+    changing amount of the same scattering material does -- a plain average is noisier
+    than it needs to be, because the amplitude scatter leaks into every band. This
+    alternates two steps to convergence:
+
+        a_i  = <R_i, M> / <R_i, R_i>       best scale taking R_i onto the current mean
+        M    = mean_i(a_i R_i)             re-mean the rescaled spectra
+
+    then rescales M so the amplitudes have mean 1, which keeps the result in the
+    original physical units instead of drifting.
+
+    Returns (mean, scales, n_iter, shape_cv, amp_cv):
+      mean      the shape at the mean amplitude, in sr^-1
+      scales    a_i per input; 1/a_i is that scan's amplitude relative to the mean
+      shape_cv  residual scatter AFTER rescaling, in per cent -- the shape uncertainty
+      amp_cv    scatter of the amplitudes, in per cent -- REAL variability, not error
+
+    Separating those two is the point. Reporting one combined error bar implies the
+    water type is uncertain when only its concentration is.
+
+    ONLY valid when the variation really is multiplicative. Check `shape_cv` against the
+    unscaled spread: if it barely falls, the spectra differ in shape and this estimator
+    is hiding that rather than helping. Pure standard library.
+    """
+    X = [list(map(float, r)) for r in spectra]
+    n, m = len(X), len(X[0])
+    if n == 0:
+        raise ValueError("no spectra")
+    w = [1.0] * m if weight is None else list(map(float, weight))
+    if len(w) != m:
+        raise ValueError("weight must match the spectrum length")
+
+    def wdot(u, v):
+        return sum(wi * ui * vi for wi, ui, vi in zip(w, u, v))
+
+    mean = [sum(x[j] for x in X) / n for j in range(m)]
+    scales = [1.0] * n
+    used = 0
+    for used in range(1, iterations + 1):
+        num = [wdot(x, mean) for x in X]
+        den = [wdot(x, x) for x in X]
+        scales = [(nu / de if de > 0 else 1.0) for nu, de in zip(num, den)]
+        g = sum(scales) / n
+        if g <= 0:
+            break
+        scales = [a / g for a in scales]          # keep the physical scale
+        new = [sum(a * x[j] for a, x in zip(scales, X)) / n for j in range(m)]
+        shift = max(abs(a - b) for a, b in zip(new, mean)) / max(
+            1e-30, max(abs(v) for v in mean))
+        mean = new
+        if shift < tol:
+            break
+
+    def cv(vals):
+        mu = sum(vals) / len(vals)
+        if mu == 0:
+            return float("nan")
+        var = sum((v - mu) ** 2 for v in vals) / len(vals)
+        return 100.0 * math.sqrt(var) / abs(mu)
+
+    res = []
+    for j in range(m):
+        col = [a * x[j] for a, x in zip(scales, X)]
+        if mean[j] != 0 and w[j] > 0:
+            res.append(cv(col))
+    shape_cv = sum(res) / len(res) if res else float("nan")
+    amp_cv = cv([1.0 / a if a else float("nan") for a in scales])
+    return mean, scales, used, shape_cv, amp_cv
 
 
 def rho_advice(wind_ms, sky="clear"):
