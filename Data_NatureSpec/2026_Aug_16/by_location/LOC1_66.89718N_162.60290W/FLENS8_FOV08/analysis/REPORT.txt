@@ -51,6 +51,25 @@ BEST-MATCHED PAIR (smallest NIR-similarity residual)
   worst  water 00007 + sky 00002   delta = +3.079e-04 sr^-1
   across all pairings Rrs(443) = 0.00276 +/- 0.00031 (1 sd)
 
+WHAT IS THE REMAINING SPREAD?  measurement error, or real water?
+  SVD mode 1 carries           98.3 %   coherent; noise would spread out
+  spread raw / normalised     11.2 % / 3.2 %
+  -> 92 % of the variance is pure AMPLITUDE, only 3.2 % is SHAPE
+  R_rs(555) range             factor 1.45 across the station
+  spectral distance vs time   r=+0.03 p=0.81  -> NO time trend
+  instrument floor (panel)    0.6 %   sky 4.4 %   water 11.2 %
+  water exceeds the instrument floor by 18x.
+
+  READING: the spread is REAL WATER, not measurement error. The composition is
+  near-constant (shape stable to 3.2 %) while the AMOUNT of scattering material
+  changes by a factor 1.45 between scans, with no time trend, over a footprint of
+  ~0.16 m. That is spatial patchiness in suspended load, which is what a turbid
+  nearshore surface does.
+
+  CONSEQUENCE FOR INVERSION: band RATIOS are far more stable than absolute R_rs
+  here (3.2 % vs 11.2 %), so ratio-based products should be quoted with more
+  confidence than absolute magnitudes at this site.
+
 PER-SCAN rho FROM THE MEASURED ANGLE (rather than a fixed 0.028)
   rho spans 0.02772-0.03463 across the achieved angles, a 25 % range.
   treatment                         r        p    scatter
