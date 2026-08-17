@@ -72,6 +72,26 @@ whether the light came from the place the model assumes.
   (self-consistency) ever landing anywhere — a further, independent reason not to trust
   M_φ from this population even by the standard already applied everywhere else.
 
+## A3b. GIOP's "good" fit says nothing about the bottom question — it never sees the evidence
+
+**GIOP fits only 400–700 nm** (Bricaud's a*_φ table stops there — `THEORY_GIOP_NOTE.md`
+§5). The single most diagnostic piece of evidence for shallow water at this site — the
+second R_rs peak near 805–810 nm — sits entirely **outside** that window. Visually
+confirmed in `giop6_all_fits.png` at every LOC3 sub-station: the fit panels stop at
+700 nm and never show the 800 nm feature at all. So the RMS numbers in §A (2.8–6.0%,
+better than LOC1's 8.8%) describe how well GIOP's smooth basis reproduces the visible-
+light shape — a fit can be "good" there while being completely blind to the part of the
+spectrum that actually distinguishes bottom-influenced water from deep water. **A good
+GIOP fit is not evidence against the bottom-reflectance caveat; it simply isn't a test
+of it.**
+
+What GIOP *does* fit less well, visible in every one of FLENS8's 4 individual panels: a
+consistent systematic notch around 660–680 nm that even the free configuration
+undershoots (compare the green FREE curve to the blue measured curve near the chlorophyll
+red-absorption band). The same region misfits at LOC1 too (its −20σ residual notch,
+`LOC1_GIOP_FINDINGS.md` §A7), so this may be a structural GIOP limitation general to this
+whole dataset rather than something specific to LOC3's optical-depth question.
+
 ## A4. Why this matters for LOC3 as a location
 
 Every diagnostic in this file — the self-consistency failures, the higher measured σ,
