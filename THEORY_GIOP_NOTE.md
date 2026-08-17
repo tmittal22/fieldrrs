@@ -206,6 +206,31 @@ Two things follow, and they point in opposite directions:
   0.0416, i.e. 0.2 % and 3 %). Once the shapes are free, those two stop caring about the
   seed. **M_φ does not**: 2.26 → 1.68, and it was 11.47 constrained.
 
+### 4.1b Does the gain survive scan by scan? Yes, 12 of 12
+
+The mean-spectrum improvement (χ²_ν 74.5 → 18.1) could in principle be an artefact of
+averaging — one badly-fitting scan dragging a summary. `giop11_chi2_crossplot.png` puts
+the free χ²_ν against the constrained χ²_ν for each of the 12 angle-matched spectra
+independently:
+
+| | value |
+|---|---|
+| constrained, median over scans | **72.0** |
+| free, median over scans | **20.6** |
+| improvement factor, median | **4.25×** |
+| improvement factor, range | 3.16× – 4.91× |
+| scans improved | **12 of 12** |
+| correlation of gain with R_rs(555) | r = +0.20 |
+
+The gain is nearly the same in every spectrum and does not correlate with brightness, so
+**the constrained shapes are wrong in the same way everywhere** — a fixed structural
+mismatch, not a per-scan accident.
+
+> The plot doubles as a solver check. Free is nested inside constrained, so **no point may
+> lie above the 1:1 line**. That region is shaded and empty. (The first version of this
+> figure shaded the *other* side, marking the only physically allowed region as
+> forbidden — caught by looking at the render.)
+
 ### 4.2 "If you know chl from OC4, don't you know the shape *and* the amplitude?"
 
 Yes — and GIOP deliberately throws the amplitude away. Bricaud gives the **absolute**
