@@ -64,6 +64,31 @@ R_RS_STATIONS = [
 ]
 
 
+#: per-day overrides of the three curated lists above; a day not listed uses them as-is
+#: (they are 2026-08-16's).
+DAYS = {
+    "2026_Aug_17": {
+        "R_RS_STATIONS": [
+            "LOC1_66.52827N_159.85315W/FLENS8_FOV08",
+            "LOC2_66.60173N_160.00094W/FLENS8_FOV08",
+            "LOC3_66.60463N_160.33681W/FLENS8_FOV08",
+            "LOC4_66.50898N_161.32982W/FLENS8_FOV08_ASSUMED_TILT40",
+            "LOC5_66.56031N_161.71074W/FLENS8_FOV08",
+        ],
+        "DAY_COMPARISON": ["by_location/aug17_final_rrs_overlay.png"],
+        "FIELD_PHOTOS": [
+            ("LOC1_66.52827N_159.85315W/FLENS8_FOV08", "00007", "choppy water with whitecaps (LOC1 drift)"),
+            ("LOC1_66.52827N_159.85315W/FLENS8_FOV08", "00001", "overcast sky scan -- grey cloud, no Rayleigh blue"),
+            ("LOC2_66.60173N_160.00094W/FLENS8_FOV08", "00016", "calm humic water at the dock (LOC2)"),
+            ("LOC2_66.60173N_160.00094W/FLENS8_FOV08", "00028", "water mirroring a willow bank -- classified land, excluded"),
+            ("LOC3_66.60463N_160.33681W/FLENS8_FOV08", "00052", "open-lake chop, whitecaps (LOC3)"),
+            ("LOC4_66.50898N_161.32982W/FLENS8_FOV08", "00059", "hand-held, turbid brown water (LOC4, no tilt recorded)"),
+            ("LOC5_66.56031N_161.71074W/FLENS8_FOV08", "00066", "sunlit chop, Hotham Inlet (LOC5)"),
+            ("LOC5_66.56031N_161.71074W/FLENS8_FOV08", "00069", "partly cloudy blue sky (LOC5)"),
+        ],
+    },
+}
+
 def _relink(src_abs, dst):
     """A relative symlink at dst pointing at src_abs -- portable within the repo (Dropbox
     syncs symlinks as such on macOS/Linux; falls back to a copy if that ever fails)."""
@@ -83,6 +108,10 @@ def main():
     a = ap.parse_args()
     day = a.day_folder.rstrip("/")
     byloc = os.path.join(day, "by_location")
+    cfg = DAYS.get(os.path.basename(day), {})
+    R_RS_STATIONS = cfg.get("R_RS_STATIONS", globals()["R_RS_STATIONS"])
+    DAY_COMPARISON = cfg.get("DAY_COMPARISON", globals()["DAY_COMPARISON"])
+    FIELD_PHOTOS = cfg.get("FIELD_PHOTOS", globals()["FIELD_PHOTOS"])
 
     n_station = 0
     for station in R_RS_STATIONS:

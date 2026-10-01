@@ -1,0 +1,36 @@
+==============================================================================
+PER-SCAN WATER QC  ·  LOC3_66.60463N_160.33681W  ·  FLENS8_FOV08
+==============================================================================
+16 water, 7 sky. Nothing is averaged until the scans are shown to be one
+population, because a 'spread' over different targets is not an uncertainty.
+
+IS IT ONE POPULATION?
+  main group: 14 scans, internal shape spread 11.43 deg
+  deviant   : 00038, 00052
+
+THE COLLAPSE TEST -- glint is additive, so a NIR correction must remove it
+  method              main spread 00038   00052
+  none                     20.03    39.33    23.18
+  nir_zero                 23.08    11.44     7.21
+  nir_similarity           14.72     9.90     5.04
+
+VERDICT PER SCAN
+  scan    sky    theta     Rrs555  700/675  412/555   NIRrat      ang  verdict
+  00035   00042    43.4   0.00339     0.97    0.724     1.42     8.64  clean
+  00036   00042    40.1   0.00176     0.99    0.414   -11.92    11.86  clean
+  00037   00042    42.0   0.00230     0.97    0.575     2.07     7.78  clean
+  00038   00047    49.3   0.00138     0.93   -0.382     0.14    39.33  glint (correctable)
+  00039   00048    48.3   0.00245     0.94    0.343     9.94    13.81  clean
+  00040   00042    46.8   0.00424     1.00    0.467     1.27     7.97  clean
+  00041   00042    47.4   0.00476     0.97    0.467     1.26     7.35  clean
+  00049   00042    44.6   0.00322     0.99    0.413     1.43     7.86  clean
+  00050   00043    61.7   0.00492     0.90    0.484     1.65     8.34  clean
+  00051   00043    57.7   0.00617     0.92    0.663     1.38     7.41  clean
+  00052   00046    47.9   0.00271     0.96    0.006    -0.84    23.18  glint (correctable)
+  00053   00042    46.2   0.00657     0.97    0.645     1.33     7.87  clean
+  00054   00042    43.9   0.00464     0.97    0.527     1.48     5.06  clean
+  00055   00042    44.1   0.00432     0.98    0.514     1.85     6.67  clean
+  00056   00042    45.3   0.00417     0.98    0.488     1.85     6.66  clean
+  00057   00042    42.8   0.00331     1.00    0.359     3.59     8.74  clean
+
+Ruddick et al. (2006) NIR similarity ratio for pure-water residual: 1.912

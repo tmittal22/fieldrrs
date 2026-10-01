@@ -108,6 +108,16 @@ def fig_all_spectra(loc, out=None, title=None):
     mean = np.mean([R[n] for n in kept], axis=0)
     ax.plot(wl[m], mean[m], lw=3.2, color="k", ls="--",
             label="plain mean (n=%d kept)" % len(kept), zorder=5)
+    # An excluded scan far outside the kept range (2026-08-17 LOC1 00012, R_rs ~0.2 from a
+    # bad white reference) would otherwise set the axis and flatten every kept scan.
+    klo = min(R[n][m].min() for n in kept); khi = max(R[n][m].max() for n in kept)
+    off = [n for n in excl if R[n][m].max() > khi + 2 * (khi - klo)
+           or R[n][m].min() < klo - 2 * (khi - klo)]
+    if off:
+        pad = 0.08 * (khi - klo)
+        ax.set_ylim(klo - pad, khi + pad)
+        ax.text(0.01, 0.98, "off-scale, excluded: %s" % ", ".join(off),
+                transform=ax.transAxes, va="top", fontsize=9, color="#777777")
     ax.set_xlabel("wavelength (nm)"); ax.set_ylabel("$R_{rs}$  sr$^{-1}$")
     ax.grid(alpha=0.25)
     ax.legend(fontsize=7.5, ncol=2 if len(names) > 8 else 1, loc="upper right")

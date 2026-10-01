@@ -303,6 +303,28 @@ steps with a different `$D`.
      for that day indefinitely. Deleting it is an optional space/reproducibility trade, not
      a required step.
 
+## Lessons from the second field day (2026-08-17, Selawik / Hotham Inlet)
+
+The 2026-08-17 day broke several assumptions the 08-16 pipeline had baked in. Its full
+record is `Data_NatureSpec/2026_Aug_17/PROCESSING_NOTES.md`; the reusable parts:
+
+- **Overcast sky** is grey (blue/green ~1.15, NIR/VIS ~0.57) and used to be classified
+  `land`. `classify()` now accepts sky with no red edge, blue/green > 1 and
+  L_t/L_ref > 0.3. Check the survey's role counts against the photos on any cloudy day.
+- **Drifting boat**: `organize_by_location.py --tol-m 300` (and the same on
+  `make_location_map.py`) keeps one drifting occupation together;
+  `analyse_location.py` / `make_interactive_report.py --max-span-m` relax the 120 m
+  one-location guard and record the change in REPORT.txt.
+- **No tilt recorded** (hand-held, sensor `n/a`): the pipeline needs a view angle. The
+  08-17 LOC4 route was a derived copy folder (`*_ASSUMED_TILT40/`) with the protocol
+  angle written into `Tilt (Y)` and a `Comment:` flag. Raw files stay untouched.
+- **Compare stations on the core-band SHAPE** (REPORT.txt, 450-700 nm), not the
+  `shape_cv_pct` in the FINAL_Rrs.csv header. That one averages 400-900 nm and blows up
+  where glint-corrected R_rs approaches 0.
+- **Step 9 is now per day**: `make_highlights.py` takes a `DAYS` entry and
+  `make_slide_deck.py` a `build_<day>()` registered in `BUILDERS`. The 08-16 output is
+  unchanged (slide text and image placement diffed identical).
+
 ## Status, 2026-08-17
 
 | location | scans | foreoptic | steps 0–6 | GIOP | notes |

@@ -82,9 +82,20 @@ def classify(spec):
     n865 = band(spec, "rad_target", 850, 880)
     r670 = band(spec, "rad_target", 665, 675)
     r750 = band(spec, "rad_target", 745, 755)
+    ref = band(spec, "rad_ref", 450, 650) if spec.has("rad_ref") else float("nan")
     d = {"blue_green": b / g, "nir_vis": n865 / vis, "L_vis": vis,
-         "red_edge": r750 / r670 if r670 else float("nan")}
+         "red_edge": r750 / r670 if r670 else float("nan"),
+         "rel_ref": vis / ref if ref else float("nan")}
     if d["nir_vis"] > 0.5:
+        # OVERCAST SKY (2026-08-17): cloud is grey, so blue/green is ~1.15 rather than
+        # Rayleigh's ~2 and NIR/VIS (0.55-0.59) crosses the land threshold. It is still
+        # separable: no red edge (0.90-0.94 vs >= 1.9 for every land target on
+        # 2026-08-16), not green-dominated (blue/green > 1 vs 0.45-0.66 for water
+        # mirroring a vegetated bank), and bright against the panel reference
+        # (0.60-0.85 vs <= 0.17 for oblique shoreline views). Confirmed scan by scan
+        # against the camera photos.
+        if d["red_edge"] < 1.0 and d["blue_green"] > 1.0 and d["rel_ref"] > 0.3:
+            return SKY, d
         return VEG, d
     if d["blue_green"] > 1.3:
         return SKY, d

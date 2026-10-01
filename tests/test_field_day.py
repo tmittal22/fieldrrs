@@ -281,5 +281,39 @@ class TestRetrievedRrs(unittest.TestCase):
                             % (st["ref"], 100 * spread))
 
 
+DATA_0817 = os.path.join(ROOT, "Data_NatureSpec", "2026_Aug_17")
+
+
+@unittest.skipUnless(os.path.isdir(DATA_0817), "2026-08-17 data not present")
+class TestOvercastSky20260817(unittest.TestCase):
+    """2026-08-17 afternoon was overcast: grey cloud fails the Rayleigh blue/green > 1.3
+    test and its NIR/VIS (~0.57) crosses the land threshold, so before the overcast rule
+    every one of these sky scans was classified 'land'. Expected roles were assigned
+    from the camera photo of each scan, independently of the spectra."""
+
+    OVERCAST_SKY = ["00000", "00001", "00002", "00008", "00010", "00011",
+                    "00021", "00022", "00023", "00024", "00025", "00026",
+                    "00042", "00043", "00044", "00045", "00046", "00047", "00048"]
+    SHORELINE_OBLIQUE = ["00031", "00032", "00034"]   # bright-ish, grey, NOT sky
+    BANK_REFLECTION = ["00027", "00028", "00029", "00030"]
+
+    @classmethod
+    def setUpClass(cls):
+        from fieldrrs.sed import read_sed
+        from process_field_day import classify
+        cls.role = {}
+        for f in os.listdir(DATA_0817):
+            if f.endswith(".sed"):
+                cls.role[f[-9:-4]] = classify(read_sed(os.path.join(DATA_0817, f)))[0]
+
+    def test_overcast_sky_is_sky(self):
+        for n in self.OVERCAST_SKY:
+            self.assertEqual(self.role[n], SKY, n)
+
+    def test_shoreline_and_bank_views_are_not_sky(self):
+        for n in self.SHORELINE_OBLIQUE + self.BANK_REFLECTION:
+            self.assertEqual(self.role[n], VEG, n)
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

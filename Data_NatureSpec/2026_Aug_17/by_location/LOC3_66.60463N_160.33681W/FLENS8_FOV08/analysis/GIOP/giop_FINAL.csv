@@ -1,0 +1,14 @@
+# THE headline table. 'mean' = fit of the amplitude-normalised mean spectrum; 'perscan' = mean +- sd over the individual angle-matched fits.
+"# constrained = GIOP-DC (S_dg 0.018, eta from QAA, 3 free amplitudes). free = S_dg and eta also fitted (5 free)."
+# NOTHING in this family fits well; see chi2_nu against a measured band uncertainty of 5.45 %.
+config,estimate,M_phi,adg443,bbp443,S_dg,eta,chi2_nu,rms_pct
+"# max free = S_dg, eta AND the a*_phi family/seed released. 'free' alone still seeds a*_phi from OC4."
+max free,mean_spectrum (Ciotti sf=1.00),7.96992,4.01552,0.142511,0.00758694,0.887118,0.170759,2.19527
+# self-consistency: seed -> retrieved M_phi fixed point
+fixed_point_chl_STABLE,47.8428,OC4,7.2202,unstable=8.20766,stable=47.8428
+constrained,mean_spectrum,3.50844,3.6819,0.0479047,0.018,0.441055,62.6397,35.2076
+constrained,perscan_mean,73.338,1.92616,0.169332,0.018,0.38757,,345.379
+constrained,perscan_sd,60.7906,2.19843,0.117136,0,0.411917,,1164.22
+free,mean_spectrum,3.02659,3.27429,0.106113,0.00776125,0.482898,0.339986,3.9169
+free,perscan_mean,2.9123,5.31348,0.252335,0.00953137,1.00476,,441.758
+free,perscan_sd,1.22218,2.93199,0.260335,0.0038555,1.5699,,1643.86

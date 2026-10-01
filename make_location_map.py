@@ -35,7 +35,12 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("folder")
     ap.add_argument("--out", default=".")
-    ap.add_argument("--zoom", type=int, default=16)
+    ap.add_argument("--zoom", type=int, default=None,
+                    help="tile zoom; default 16, lowered automatically so the mosaic "
+                         "stays <= 4096 px wide (a multi-site day spans ~100 km)")
+    ap.add_argument("--tol-m", type=float, default=60.0,
+                    help="station clustering distance; use the same value given to "
+                         "organize_by_location.py so the map's LOCs match by_location/")
     ap.add_argument("--provider", default="esri_imagery")
     ap.add_argument("--place", default="",
                     help="place name for the title/inset, e.g. 'Kotzebue, Alaska'. "
@@ -44,7 +49,7 @@ def main():
     a = ap.parse_args()
 
     scans = survey(a.folder)
-    locs = cluster(scans)
+    locs = cluster(scans, a.tol_m)
     # ground truth, not the folder name (which can be named anything) or a hardcoded
     # date left over from whichever day this script was last run on.
     dates = sorted({s["spec"].header.get("Date", "").split(",")[0].strip()
@@ -63,9 +68,20 @@ def main():
     lons = [s["lon"] for s in scans]
     padx = max(0.006, (max(lons) - min(lons)) * 0.45)
     pady = max(0.0016, (max(lats) - min(lats)) * 0.45)
+    # A multi-site day can be ~100 km wide and ~10 km tall; pad latitude so the panel
+    # is at least half as tall as it is wide instead of collapsing into a strip.
+    coslat = math.cos(math.radians(sum(lats) / len(lats)))
+    w_deg_lat = (max(lons) - min(lons) + 2 * padx) * coslat
+    pady = max(pady, (0.5 * w_deg_lat - (max(lats) - min(lats))) / 2)
     box = (min(lats) - pady, max(lats) + pady, min(lons) - padx, max(lons) + padx)
 
-    img, ext = bm.mosaic(*box, zoom=a.zoom, provider=a.provider)
+    zoom = a.zoom
+    if zoom is None:
+        zoom = 16
+        while zoom > 1 and 256 * abs(bm.deg2num(box[0], box[3], zoom)[0]
+                                     - bm.deg2num(box[0], box[2], zoom)[0]) > 4096:
+            zoom -= 1
+    img, ext = bm.mosaic(*box, zoom=zoom, provider=a.provider)
     err = bm.check_distortion(ext, img.size[1])
 
     fig = plt.figure(figsize=(15.5, 8.2))
@@ -83,7 +99,8 @@ def main():
     # Label boxes are positioned in AXES FRACTION, not data coordinates, so they can
     # never leave the canvas however the sites happen to fall. Leader lines still point
     # at the true positions.
-    place = [(0.055, 0.93), (0.055, 0.75), (0.055, 0.57)]
+    step = min(0.18, 0.72 / max(1, len(locs)))
+    place = [(0.055, 0.93 - step * k) for k in range(max(3, len(locs)))]
     for i, c in enumerate(locs):
         gps = [x["gps"] for x in c["scans"] if x["gps"] is not None]
         fos = sorted({x["fo"] for x in c["scans"]})
@@ -91,6 +108,12 @@ def main():
         n_s = sum(1 for x in c["scans"] if x["role"] == "sky")
         ax.scatter(c["lon"], c["lat"], s=420, marker="o", facecolor="none",
                    edgecolor=SITE[i % 3], linewidth=2.8, zorder=6)
+        if len(locs) > 3:     # details live in the right-hand column; tag points only
+            ax.annotate("LOC%d" % (i + 1), xy=(c["lon"], c["lat"]), xytext=(14, 10),
+                        textcoords="offset points", fontsize=11, weight="bold",
+                        zorder=7, bbox=dict(boxstyle="round,pad=0.25", fc="white",
+                                            ec=SITE[i % 3], lw=2, alpha=0.93))
+            continue
         ax.annotate(
             "LOC%d   %.5f$^\\circ$N  %.5f$^\\circ$W\n"
             "%d scans  ·  %d water / %d sky\n"
@@ -108,13 +131,16 @@ def main():
 
     # scale bar
     kx = 111320.0 * math.cos(math.radians(latm))
-    d = 250.0 / kx
+    span_m = (max(lons) - min(lons) + 2 * padx) * kx
+    bar_m = max(v for v in (250, 500, 1000, 2000, 5000, 10000, 20000, 50000)
+                if v <= 0.25 * span_m) if span_m >= 1000 else 250
+    d = bar_m / kx
     x0, x1 = ax.get_xlim(); y0, y1 = ax.get_ylim()
     sx = x1 - 0.05 * (x1 - x0) - d
     sy = y0 + 0.06 * (y1 - y0)
     ax.plot([sx, sx + d], [sy, sy], color="w", lw=6, solid_capstyle="butt", zorder=8)
     ax.plot([sx, sx + d], [sy, sy], color="k", lw=3, solid_capstyle="butt", zorder=9)
-    ax.text(sx + d / 2, sy + 0.012 * (y1 - y0), "250 m", ha="center", fontsize=10,
+    ax.text(sx + d / 2, sy + 0.012 * (y1 - y0), ("%g km" % (bar_m / 1000) if bar_m >= 1000 else "%d m" % bar_m), ha="center", fontsize=10,
             weight="bold", color="w", zorder=9,
             path_effects=None)
     ax.set_xlabel("longitude ($^\\circ$E)"); ax.set_ylabel("latitude ($^\\circ$N)")

@@ -323,9 +323,11 @@ def f_final_mean(water, sky, wl):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("folder")
+    ap.add_argument("--max-span-m", type=float, default=120.0,
+                    help="see analyse_location.py --max-span-m")
     a = ap.parse_args()
     scans = survey(a.folder)
-    span = assert_same_dataset(scans)
+    span = assert_same_dataset(scans, a.max_span_m)
     wl = scans[0]["spec"].wavelength
     sky = sorted([s for s in scans if s["role"] == "sky"], key=lambda x: x["n"])
     water = sorted([s for s in scans if s["role"] == "water"], key=lambda x: x["n"])

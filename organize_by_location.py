@@ -75,7 +75,9 @@ def cluster(scans, tol_m=TOL_M):
                 break
         else:
             locs.append({"lat": s["lat"], "lon": s["lon"], "scans": [s]})
-    locs.sort(key=lambda c: min(x["gps"] for x in c["scans"] if x["gps"] is not None))
+    # Scan counter, not GPS hours: GPS time-of-day wraps at 00 UTC (an Alaskan evening),
+    # which numbered 2026-08-17's last two stations LOC1/LOC2.
+    locs.sort(key=lambda c: min(x["n"] for x in c["scans"]))
     return locs
 
 
@@ -89,12 +91,15 @@ def main():
     ap.add_argument("--apply", action="store_true",
                     help="copy files into the new tree (originals untouched)")
     ap.add_argument("--with-photos", action="store_true")
+    ap.add_argument("--tol-m", type=float, default=TOL_M,
+                    help="clustering distance; raise it for a drifting boat, whose one "
+                         "occupation spreads over hundreds of metres (2026-08-17)")
     a = ap.parse_args()
 
     scans = survey(a.folder)
-    locs = cluster(scans)
+    locs = cluster(scans, a.tol_m)
     print("%d scans -> %d locations (%.0f m tolerance)\n" % (len(scans), len(locs),
-                                                             TOL_M))
+                                                             a.tol_m))
     manifest = []
     for i, c in enumerate(locs, 1):
         name = label(c["lat"], c["lon"], i)

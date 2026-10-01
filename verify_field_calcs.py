@@ -78,7 +78,7 @@ def v2_instrument(scans):
             continue
         signed = []
         for w, t_, rf, th in zip(sp.wavelength, sp.columns["rad_target"],
-                                 sp.columns["rad_ref"], sp.columns["reflectance"]):
+                                 sp.columns["rad_ref"], sp.reflectance):
             if rf <= 0 or th <= 1e-4 or 758 <= w <= 772:
                 continue
             if 450 <= w <= 700:

@@ -272,7 +272,7 @@ def match_by_angle(water, sky, respect_blocks=True):
     return out
 
 
-def assert_same_dataset(scans):
+def assert_same_dataset(scans, max_span_m=120.0):
     """Refuse to analyse a mixed bag: one position, one foreoptic, one wavelength grid."""
     fos = {s["fo"] for s in scans}
     if len(fos) > 1:
@@ -283,8 +283,10 @@ def assert_same_dataset(scans):
     import math as _m
     span = _m.hypot((max(lat) - min(lat)) * 111320,
                     (max(lon) - min(lon)) * 111320 * _m.cos(_m.radians(lat[0])))
-    if span > 120.0:
-        raise ValueError("scans span %.0f m; this is not one location" % span)
+    if span > max_span_m:
+        raise ValueError("scans span %.0f m; this is not one location (limit %.0f m, "
+                         "raise with --max-span-m only for a drifting occupation)"
+                         % (span, max_span_m))
     if len({len(s["spec"].wavelength) for s in scans}) > 1:
         raise ValueError("scans are on different wavelength grids")
     return span
@@ -547,14 +549,16 @@ def fig_sensitivity(water, sky, wl, outdir, tag, panel_r, rho, fov, glint="none"
     import numpy as np
     from scipy import stats as sps
 
-    if len(water) < 4:
+    n_rng = sum(1 for w in water if w["range"] is not None)
+    n_tilt = len({w["spec"].tilt_y_deg for w in water})
+    if len(water) < 4 or n_rng < 4 or n_tilt < 2:
         fig, ax = plt.subplots(figsize=(8, 4))
         ax.axis("off")
         ax.text(0.5, 0.5,
-                "Only %d water scan%s here -- too few for a trend/correlation study.\n"
-                "This figure needs several scans spanning a range of angle/footprint;\n"
-                "see the station's REPORT.txt for what this sub-population is FOR."
-                % (len(water), "" if len(water) == 1 else "s"),
+                "%d water scan%s, %d with a recorded range, %d distinct tilt(s) --\n"
+                "too few for a trend/correlation study (2026-08-17 LOC4: no range and\n"
+                "an ASSUMED constant tilt). See the station's REPORT.txt."
+                % (len(water), "" if len(water) == 1 else "s", n_rng, n_tilt),
                 ha="center", va="center", fontsize=11, transform=ax.transAxes)
         fig.suptitle("%s -- angle/footprint sensitivity: not applicable" % tag,
                      fontsize=12)
@@ -1472,10 +1476,14 @@ def main():
                          "provably unchanged unless this is passed explicitly. NOT "
                          "applied in fig5 (its own diagnostic IS the uncorrected "
                          "NIR-similarity mismatch) or fig8 (an isolated rho test).")
+    ap.add_argument("--max-span-m", type=float, default=120.0,
+                    help="largest position spread accepted as ONE station. Raise only "
+                         "for a boat drifting through one water body (2026-08-17 LOC1, "
+                         "308 m in 7 min); recorded in REPORT.txt when changed.")
     a = ap.parse_args()
 
     scans = survey(a.folder)
-    span_m = assert_same_dataset(scans)
+    span_m = assert_same_dataset(scans, a.max_span_m)
     loc = os.path.basename(os.path.dirname(a.folder.rstrip("/")))
     fo = os.path.basename(a.folder.rstrip("/"))
     tag = "%s  ·  %s" % (loc, fo)
@@ -1507,6 +1515,9 @@ def main():
     P("%d sky, %d water, %d LAND targets" % (len(sky), len(water), len(land)))
     P("all scans within %.0f m and one foreoptic: pairing cannot leave this location"
       % span_m)
+    if a.max_span_m != 120.0:
+        P("  NOTE: span limit raised to %.0f m (--max-span-m, default 120) -- a drifting "
+          "occupation, not a fixed station" % a.max_span_m)
     P("glint correction applied to the final product: %s%s"
       % (a.glint, "  (default -- no correction)" if a.glint == "none" else
          "  -- NOT the default, see --glint in FIELD_DAY_WORKFLOW.md"))

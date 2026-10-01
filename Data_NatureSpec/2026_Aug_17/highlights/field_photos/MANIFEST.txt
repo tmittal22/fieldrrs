@@ -1,0 +1,8 @@
+LOC1_00007.jpg -- choppy water with whitecaps (LOC1 drift)
+LOC1_00001.jpg -- overcast sky scan -- grey cloud, no Rayleigh blue
+LOC2_00016.jpg -- calm humic water at the dock (LOC2)
+LOC2_00028.jpg -- water mirroring a willow bank -- classified land, excluded
+LOC3_00052.jpg -- open-lake chop, whitecaps (LOC3)
+LOC4_00059.jpg -- hand-held, turbid brown water (LOC4, no tilt recorded)
+LOC5_00066.jpg -- sunlit chop, Hotham Inlet (LOC5)
+LOC5_00069.jpg -- partly cloudy blue sky (LOC5)

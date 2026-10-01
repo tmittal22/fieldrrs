@@ -1,6 +1,9 @@
 """Build the field-day results slide deck from already-curated, already-verified material.
 
     python make_slide_deck.py Data_NatureSpec/2026_Aug_16 --out KOTZEBUE_20260816_RESULTS.pptx
+    python make_slide_deck.py Data_NatureSpec/2026_Aug_17 --out Data_NatureSpec/2026_Aug_17/SELAWIK_20260817_RESULTS.pptx
+
+Slide content is hand-curated per day: one build_<day>() each, registered in BUILDERS.
 
 Every number and figure here already exists and was already checked elsewhere this
 session -- this script does no new analysis. It reads from `highlights/` (make_highlights.py,
@@ -105,6 +108,20 @@ def main():
     prs.slide_height = H
     blank = prs.slide_layouts[6]
 
+    builder = BUILDERS.get(os.path.basename(day))
+    if builder is None:
+        raise SystemExit("no slide content defined for %s; add a build_<day>() and register "
+                         "it in BUILDERS (content is hand-curated per day, see the docstring)"
+                         % os.path.basename(day))
+    builder(prs, blank, hl, byloc, station_hl)
+
+    n_slides = len(prs.slides._sldIdLst)
+    prs.save(a.out)
+    print("wrote", a.out, "(%d slides)" % n_slides)
+
+
+def build_aug16(prs, blank, hl, byloc, station_hl):
+    """2026-08-16 Kotzebue. Content unchanged from the original single-day script."""
     # ---------------------------------------------------------------- 1. Title
     s = prs.slides.add_slide(blank)
     box = s.shapes.add_textbox(Inches(0.8), Inches(2.6), Inches(11.7), Inches(2.2))
@@ -289,9 +306,186 @@ def main():
         ("The solver lands ~5% off the true χ² minimum there — a small, real implementation gap.", 1, RGBColor(0x22,0x22,0x22), False),
     ], Inches(0.5), Inches(1.3), Inches(12.3), Inches(5.9), size=16)
 
-    n_slides = len(prs.slides._sldIdLst)
-    prs.save(a.out)
-    print("wrote", a.out, "(%d slides)" % n_slides)
+
+INK = RGBColor(0x22, 0x22, 0x22)
+
+
+def build_aug17(prs, blank, hl, byloc, station_hl):
+    """2026-08-17 Selawik / Hotham Inlet. Numbers transcribed from PROCESSING_NOTES.md,
+    each station's REPORT.txt / FINAL_Rrs.csv and LOC2/LOC3_GIOP_FINDINGS.md."""
+    L1 = "LOC1_66.52827N_159.85315W/FLENS8_FOV08"
+    L2 = "LOC2_66.60173N_160.00094W/FLENS8_FOV08"
+    L3 = "LOC3_66.60463N_160.33681W/FLENS8_FOV08"
+    L4 = "LOC4_66.50898N_161.32982W/FLENS8_FOV08_ASSUMED_TILT40"
+    L5 = "LOC5_66.56031N_161.71074W/FLENS8_FOV08"
+    photo = lambda name: os.path.join(hl, "field_photos", name)
+
+    # ---------------------------------------------------------------- title
+    s = prs.slides.add_slide(blank)
+    box = s.shapes.add_textbox(Inches(0.8), Inches(2.6), Inches(11.7), Inches(2.2))
+    tf = box.text_frame; tf.word_wrap = True
+    p = tf.paragraphs[0]
+    r = p.add_run(); r.text = "Above-Water Remote-Sensing Reflectance & GIOP Inversion"
+    r.font.size = Pt(34); r.font.bold = True; r.font.color.rgb = NAVY
+    p2 = tf.add_paragraph()
+    r2 = p2.add_run(); r2.text = "Selawik & Hotham Inlet, Alaska  ·  2026-08-17  ·  5 stations, 71 scans"
+    r2.font.size = Pt(20); r2.font.color.rgb = TEAL
+    p3 = tf.add_paragraph()
+    r3 = p3.add_run()
+    r3.text = ("NaturaSpec Plus, FLENS8 8°  ·  overcast, choppy  ·  angle-matched sky pairing, "
+               "NIR-similarity glint correction, GIOP (tmittal22/giop-workbench)")
+    r3.font.size = Pt(14); r3.font.color.rgb = GREY
+
+    # ---------------------------------------------------------------- map
+    s = prs.slides.add_slide(blank)
+    _title(s, "Where: Selawik River, Selawik Lake, Hotham Inlet",
+           "Stations numbered in time order  ·  LOC1-3 afternoon (overcast), LOC4-5 evening  ·  LOC1 drifted 308 m")
+    _pic_fit(s, os.path.join(hl, "site_map.png"), Inches(0.4), Inches(1.15),
+             Inches(12.5), Inches(6.0))
+
+    # ---------------------------------------------------------------- conditions
+    s = prs.slides.add_slide(blank)
+    _title(s, "Conditions: overcast and choppy",
+           "What the instrument camera saw (red dot = 8° field of view)")
+    for i, (fn, cap) in enumerate([
+            ("LOC1_00001.jpg", "Overcast sky: no Rayleigh blue"),
+            ("LOC1_00007.jpg", "LOC1 chop, whitecaps"),
+            ("LOC3_00052.jpg", "LOC3 open-lake chop"),
+            ("LOC5_00066.jpg", "LOC5 sunlit chop")]):
+        x = Inches(0.3 + 3.2 * i)
+        _pic_fit(s, photo(fn), x, Inches(1.3), Inches(3.0), Inches(2.5))
+        _caption(s, cap, x, Inches(3.85), Inches(3.0))
+    _bullets(s, [
+        "Grey cloud has blue/green ≈ 1.15 (Rayleigh sky ≈ 2) and NIR/VIS ≈ 0.57, so the shape classifier called all 19 overcast sky scans 'land'. "
+        "Fixed: sky = no red edge, blue/green > 1, L_t/L_ref > 0.3. All 60 Aug-16 roles unchanged.",
+        "Chop: every deviant water scan at LOC1-3 tested as correctable glint, none as a different water body. "
+        "NIR similarity (Ruddick et al. 2006) applied at every station.",
+        "Transmittance at LOC4 (0.21) and LOC5 (0.39) is below the clear-sky check's 0.4 floor: heavy evening cloud, not a unit error.",
+    ], Inches(0.4), Inches(4.4), Inches(12.5), Inches(2.9), size=15)
+
+    # ---------------------------------------------------------------- overlay
+    s = prs.slides.add_slide(blank)
+    _title(s, "Three water types in one day", "Final R_rs, all stations, glint-corrected; Aug-16 Kotzebue LOC1 for reference")
+    _pic_fit(s, os.path.join(hl, "aug17_final_rrs_overlay.png"), Inches(0.3), Inches(1.15),
+             Inches(12.7), Inches(4.3))
+    _bullets(s, [
+        "Humic (LOC1-3, Selawik): blue suppressed, maximum 580-690 nm. LOC2/LOC3 peak in the red.",
+        "Hotham Inlet (LOC5): green peak at 565 nm, like Kotzebue on Aug 16.",
+        "Very high sediment (LOC4): R_rs(555) 4x LOC5 and 8-9x LOC2/LOC3, strong 810 nm feature. Absolute level rests on an ASSUMED view angle.",
+        ("Shape = core-band (450-700 nm) consistency of the amplitude-normalised mean.", 0, TEAL, False),
+    ], Inches(0.4), Inches(5.5), Inches(12.5), Inches(1.9), size=14)
+
+    # ---------------------------------------------------------------- LOC2 / LOC3
+    for station, name, sub, bullets in [
+        (L2, "LOC2: Selawik village",
+         "66.60173 N 160.00094 W  ·  22 scans: 7 water, 6 sky, 9 land/bank  ·  calm, at the dock",
+         [
+             ("R_rs(555) = 0.00264 sr⁻¹, maximum at 687 nm  ·  shape 3.9 %, amplitude 14.1 %", 0, INK, False),
+             ("GIOP (free): a_dg(443) = 2.66 m⁻¹ (±36 % per scan), S_dg = 0.0084 nm⁻¹, b_bp(443) = 0.046 m⁻¹", 0, INK, False),
+             ("Fixed S_dg = 0.018 fails: χ²_ν 47, RMS 30 %, M_φ driven to 0. Best fit still misses by 13 % RMS; η pinned at its −1 bound.", 0, RED, False),
+             ("A 670 nm dip shows chlorophyll-a is present, but M_φ is not identifiable. Do not quote chlorophyll.", 0, TEAL, False),
+         ]),
+        (L3, "LOC3: Selawik Lake, west",
+         "66.60463 N 160.33681 W  ·  23 scans: 16 water, 7 sky  ·  open-lake chop",
+         [
+             ("R_rs(555) = 0.00325 sr⁻¹, maximum at 649 nm  ·  shape 6.8 %, amplitude 24.3 %", 0, INK, False),
+             ("GIOP: a_dg(443) = 3.3-4.0 m⁻¹ (±55 % per scan), S_dg = 0.0076-0.0078 nm⁻¹, b_bp(443) = 0.11-0.14 m⁻¹ (≈2.5x LOC2)", 0, INK, False),
+             ("Freeing S_dg: RMS 35 % to 3.9 % (2.2 % max freedom). Same flat slope as LOC2, 15 km away.", 0, INK, False),
+             ("Per-scan R_rs(400) varies 6x; that is where ρ·L_sky error dominates and where a_dg is set. Depth not measured.", 0, RED, False),
+         ]),
+    ]:
+        s = prs.slides.add_slide(blank)
+        _title(s, name, sub)
+        _pic_fit(s, station_hl(station, "fig12_FINAL_mean_Rrs.png"),
+                 Inches(0.3), Inches(1.2), Inches(5.9), Inches(3.3))
+        _caption(s, "Final R_rs (arrow labels are template annotations)", Inches(0.3), Inches(4.55), Inches(5.9))
+        _pic_fit(s, station_hl(station, "giop10_final_result.png"),
+                 Inches(6.3), Inches(1.2), Inches(6.6), Inches(3.3))
+        _caption(s, "GIOP final result (ignore the green text box: Aug-16 text)", Inches(6.3), Inches(4.55), Inches(6.6))
+        _bullets(s, bullets, Inches(0.4), Inches(5.0), Inches(12.5), Inches(2.3), size=15)
+
+    # ---------------------------------------------------------------- humic CDOM synthesis
+    s = prs.slides.add_slide(blank)
+    _title(s, "Selawik: CDOM-dominated, unusually flat CDOM slope",
+           "Every individual water scan, LOC2 (left) and LOC3 (right)")
+    _pic_fit(s, station_hl(L2, "fig14_all_spectra.png"), Inches(0.3), Inches(1.2),
+             Inches(6.3), Inches(3.4))
+    _pic_fit(s, station_hl(L3, "fig14_all_spectra.png"), Inches(6.7), Inches(1.2),
+             Inches(6.3), Inches(3.4))
+    _bullets(s, [
+        "a_dg(443) 2.7-4.0 m⁻¹, 3-12x the Aug-16 Kotzebue stations (0.33-0.78 m⁻¹)",
+        "Fitted S_dg ≈ 0.008 nm⁻¹ at both stations vs the usual 0.014-0.020. Candidates, not separated here: humic terrestrial DOM, detrital absorption folded into a_dg, or model error absorbed by the slope.",
+        ("Fine steps near 527 and 589 nm line up with the Fe E and Na D Fraunhofer lines: probably sky/water wavelength misregistration, not water. Unverified.", 0, TEAL, False),
+    ], Inches(0.4), Inches(4.8), Inches(12.5), Inches(2.5), size=15)
+
+    # ---------------------------------------------------------------- LOC1
+    s = prs.slides.add_slide(blank)
+    _title(s, "LOC1: Selawik River, drifting",
+           "66.52827 N 159.85315 W  ·  13 scans: 7 water, 6 sky  ·  boat drifted 308 m in 7 min")
+    _pic_fit(s, station_hl(L1, "fig12_FINAL_mean_Rrs.png"), Inches(0.3), Inches(1.2),
+             Inches(6.3), Inches(3.5))
+    _caption(s, "Final R_rs, 6 water scans", Inches(0.3), Inches(4.75), Inches(6.3))
+    _pic_fit(s, station_hl(L1, "fig14_all_spectra.png"), Inches(6.7), Inches(1.2),
+             Inches(6.3), Inches(3.5))
+    _caption(s, "Every scan, 00012 shown but excluded", Inches(6.7), Inches(4.75), Inches(6.3))
+    _bullets(s, [
+        "R_rs(555) = 0.00301 sr⁻¹, maximum at 583 nm  ·  shape 4.8 %, amplitude 13.1 %",
+        ("00012 excluded: its white reference was taken on a dark target (L_ref = 0.005), giving R_rs(555) = 0.21", 0, RED, False),
+        "Usable with caveats: spread over 3 panel-reference blocks and a 308 m drift (--max-span-m 350). GIOP not triaged.",
+        ("00004 dips negative in the 720/760/820 nm atmospheric bands: a sky/panel mismatch, the noisiest scan of the six.", 0, TEAL, False),
+    ], Inches(0.4), Inches(5.2), Inches(12.5), Inches(2.1), size=15)
+
+    # ---------------------------------------------------------------- LOC4
+    s = prs.slides.add_slide(blank)
+    _title(s, "LOC4: Hotham Inlet, very turbid, tilt ASSUMED",
+           "66.50898 N 161.32982 W  ·  7 scans: 4 water, 3 sky  ·  hand-held, tilt sensor logged n/a")
+    _pic_fit(s, station_hl(L4, "fig12_FINAL_mean_Rrs.png"), Inches(0.3), Inches(1.2),
+             Inches(6.3), Inches(3.5))
+    _caption(s, "Final R_rs at an assumed 40° view angle", Inches(0.3), Inches(4.75), Inches(6.3))
+    _pic_fit(s, photo("LOC4_00059.jpg"), Inches(6.9), Inches(1.2), Inches(3.0), Inches(3.5))
+    _caption(s, "00059: hand-held, brown water", Inches(6.9), Inches(4.75), Inches(3.0))
+    _pic_fit(s, station_hl(L4, "fig14_all_spectra.png"), Inches(10.0), Inches(1.2),
+             Inches(3.1), Inches(3.5))
+    _caption(s, "Every scan", Inches(10.0), Inches(4.75), Inches(3.1))
+    _bullets(s, [
+        "R_rs(555) = 0.0243 sr⁻¹  ·  shape 1.6 %, amplitude 8.6 %  ·  strong 810 nm feature = very high sediment",
+        "Derived copies with Tilt (Y) = 40° (the protocol angle) in FLENS8_FOV08_ASSUMED_TILT40/; raw files untouched",
+        ("Glint correction removed 0.014 sr⁻¹, 5x LOC5's offset: ρ·L_sky likely under-subtracted (arm in sky photos). Use the shape; the absolute level is tentative.", 0, RED, False),
+    ], Inches(0.4), Inches(5.2), Inches(12.5), Inches(2.1), size=15)
+
+    # ---------------------------------------------------------------- LOC5
+    s = prs.slides.add_slide(blank)
+    _title(s, "LOC5: Hotham Inlet, glint correction tested",
+           "66.56031 N 161.71074 W  ·  6 scans: 3 water, 3 sky  ·  sunlit chop, partly cloudy")
+    _pic_fit(s, station_hl(L5, "fig12_FINAL_mean_Rrs.png"), Inches(0.3), Inches(1.2),
+             Inches(5.6), Inches(3.5))
+    _caption(s, "Final R_rs, glint-corrected", Inches(0.3), Inches(4.75), Inches(5.6))
+    _pic_fit(s, os.path.join(byloc, L5, "LOC5_glint_comparison.png"), Inches(6.1),
+             Inches(1.2), Inches(7.0), Inches(3.5))
+    _caption(s, "Before / after NIR similarity, and the difference", Inches(6.1), Inches(4.75), Inches(7.0))
+    _bullets(s, [
+        "Correction is a flat −0.0027 sr⁻¹ (spectral SD 6e-5): an additive surface term. R_rs(555) 0.0086 to 0.0060.",
+        ("Kept: scan-to-scan amplitude scatter halves (33.6 % to 17.9 %), shape 2.7 % to 2.3 %.", 0, TEAL, True),
+        "n = 3: green peak at 565 nm, close to Kotzebue Aug 16. GIOP not triaged.",
+    ], Inches(0.4), Inches(5.2), Inches(12.5), Inches(2.1), size=15)
+
+    # ---------------------------------------------------------------- open items
+    s = prs.slides.add_slide(blank)
+    _title(s, "Open items")
+    _bullets(s, [
+        ("Measure depth at Selawik Lake (LOC3)", 0, NAVY, True),
+        ("A bottom contribution would move a_dg and b_bp; no photo shows the bottom, which argues against it but does not exclude it.", 1, INK, False),
+        ("Check the tilt sensor before hand-held scans", 0, NAVY, True),
+        ("LOC4 lost its geometry entirely; its absolute R_rs depends on an assumed angle.", 1, INK, False),
+        ("Retake the white reference if the panel is not in view", 0, NAVY, True),
+        ("LOC1 00012's reference was a dark target and the scan had to be dropped.", 1, INK, False),
+        ("Explain the flat CDOM slope", 0, NAVY, True),
+        ("A lab a_CDOM spectrum from a Selawik water sample would separate humic DOM from detrital absorption.", 1, INK, False),
+        ("Triage GIOP at LOC1, LOC4, LOC5; test the Fraunhofer-line hypothesis for the 527/589 nm steps", 0, NAVY, True),
+    ], Inches(0.5), Inches(1.3), Inches(12.3), Inches(5.9), size=16)
+
+
+BUILDERS = {"2026_Aug_16": build_aug16, "2026_Aug_17": build_aug17}
 
 
 if __name__ == "__main__":

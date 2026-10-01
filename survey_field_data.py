@@ -65,7 +65,7 @@ def infer_role(ytilt, vis, ref_vis):
     from the horizontal is the sky view, near -40 (or 40 past vertical) the water view.
     Brightness breaks ties, since a panel in full sun is far brighter than either.
     """
-    if ytilt is None:
+    if ytilt is None or not ytilt.strip():   # tilt sensor can log an empty field
         return "?"
     t = float(ytilt)
     if vis > 0.5 * ref_vis:

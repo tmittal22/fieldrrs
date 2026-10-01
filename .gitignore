@@ -7,3 +7,7 @@ demo_scans/
 tests/data/
 .tilecache/
 results_20260816/
+# instrument binaries and the flat raw export (by_location/ holds the per-scan copies)
+*.RAW
+Data_NatureSpec/*/NaturaSpecPlus_*
+Data_NatureSpec/2026_Aug_18/

@@ -282,7 +282,8 @@ def f_uncertainty(wl, mean, ssd, chl, out, ndraw=150):
                          (axes[2], 2, "$b_{bp}$(443)")):
         for lab, col in (("6 bands", "#c0392b"), ("hyperspectral", "#2e7d32")):
             v = store[lab][:, k]
-            ax.hist(v, bins=28, alpha=0.6, color=col,
+            # every draw identical = a parameter pinned at its bound (2026-08-17 LOC2)
+            ax.hist(v, bins=28 if np.ptp(v) > 1e-6 * np.abs(v).max() else 1, alpha=0.6, color=col,
                     label="%s: %.3g ± %.0f %%" % (lab, v.mean(),
                                                   100 * v.std() / abs(v.mean())))
         ax.set_xlabel(title); ax.set_ylabel("draws"); ax.legend(fontsize=9)

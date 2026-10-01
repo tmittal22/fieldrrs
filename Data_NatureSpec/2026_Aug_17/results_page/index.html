@@ -1,0 +1,335 @@
+<title>Selawik Field Spectra</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Spectral:wght@500;600&family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+:root{
+  --ground:#F2F4F1; --surface:#FFFFFF; --ink:#1B211E; --muted:#59625D; --rule:#D3D9D4;
+  --accent:#8C4A12; --accent-soft:#F1E3D3; --warn:#9A5B00; --warn-soft:#FBEFD9;
+  --bad:#A3312A; --bad-soft:#F7E1DE; --ok:#2E6B45; --ok-soft:#DFEFE4; --plate:#FFFFFF;
+  --c1:#1f77b4; --c2:#ff7f0e; --c3:#2ca02c; --c4:#d62728; --c5:#9467bd; --cref:#666;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    color-scheme:dark;
+    --ground:#111513; --surface:#191E1B; --ink:#E2E7E3; --muted:#9BA49F; --rule:#2B332F;
+    --accent:#E39C5C; --accent-soft:#33261A; --warn:#E8B055; --warn-soft:#2F2614;
+    --bad:#EE8A80; --bad-soft:#341C1A; --ok:#7CC796; --ok-soft:#18291E; --plate:#F4F4F2;
+  }
+}
+:root[data-theme="dark"]{
+  color-scheme:dark;
+  --ground:#111513; --surface:#191E1B; --ink:#E2E7E3; --muted:#9BA49F; --rule:#2B332F;
+  --accent:#E39C5C; --accent-soft:#33261A; --warn:#E8B055; --warn-soft:#2F2614;
+  --bad:#EE8A80; --bad-soft:#341C1A; --ok:#7CC796; --ok-soft:#18291E; --plate:#F4F4F2;
+}
+*{box-sizing:border-box}
+body{background:var(--ground);color:var(--ink);font:15.5px/1.6 "IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif;padding-inline:20px;padding-block:28px 64px}
+.wrap{max-width:980px;margin:0 auto;display:flex;flex-direction:column;gap:44px}
+h1,h2,h3{font-family:Spectral,Georgia,"Times New Roman",serif;font-weight:600;text-wrap:balance;margin:0;line-height:1.2}
+h1{font-size:2.3rem;letter-spacing:-.01em}
+h2{font-size:1.55rem}
+h3{font-size:1.12rem;font-weight:500}
+p{margin:0;max-width:68ch}
+.mono,code,td.num,th.num{font-family:"IBM Plex Mono",ui-monospace,Menlo,monospace}
+code{font-size:.88em;background:var(--accent-soft);padding:.05em .35em;border-radius:3px}
+.eyebrow{font:500 .76rem/1 "IBM Plex Mono",monospace;letter-spacing:.09em;text-transform:uppercase;color:var(--accent)}
+header{display:flex;flex-direction:column;gap:14px;border-bottom:1px solid var(--rule);padding-bottom:26px}
+.lede{font-size:1.06rem;color:var(--ink)}
+.meta{display:flex;flex-wrap:wrap;gap:8px 22px;color:var(--muted);font-size:.86rem}
+.meta span b{color:var(--ink);font-weight:500}
+section{display:flex;flex-direction:column;gap:18px}
+.sec-head{display:flex;flex-direction:column;gap:6px}
+.sub{color:var(--muted)}
+figure{margin:0;display:flex;flex-direction:column;gap:8px}
+figure img{display:block;width:100%;height:auto;background:var(--plate);border:1px solid var(--rule);border-radius:4px}
+figcaption{font-size:.86rem;color:var(--muted);max-width:80ch}
+figcaption b{color:var(--ink);font-weight:600}
+.tablewrap{overflow-x:auto;border:1px solid var(--rule);border-radius:6px;background:var(--surface)}
+table{border-collapse:collapse;width:100%;font-size:.88rem;font-variant-numeric:tabular-nums}
+th,td{padding:9px 12px;text-align:left;border-bottom:1px solid var(--rule);white-space:nowrap}
+th{font-weight:600;font-size:.76rem;letter-spacing:.04em;text-transform:uppercase;color:var(--muted);background:var(--ground)}
+tr:last-child td{border-bottom:0}
+td.num,th.num{text-align:right}
+td.ref{color:var(--muted)}
+.chip{display:inline-flex;align-items:center;gap:8px;font-weight:600}
+.chip i{width:11px;height:11px;border-radius:50%;display:inline-block;flex:none}
+.pill{display:inline-block;font:500 .72rem/1 "IBM Plex Mono",monospace;padding:5px 8px;border-radius:999px;letter-spacing:.02em}
+.pill.ok{background:var(--ok-soft);color:var(--ok)}
+.pill.warn{background:var(--warn-soft);color:var(--warn)}
+.pill.bad{background:var(--bad-soft);color:var(--bad)}
+.station{background:var(--surface);border:1px solid var(--rule);border-radius:8px;padding:24px;display:flex;flex-direction:column;gap:20px}
+.station-head{display:flex;flex-wrap:wrap;align-items:baseline;justify-content:space-between;gap:8px 16px}
+.station-head .coords{font:400 .82rem "IBM Plex Mono",monospace;color:var(--muted)}
+.kv{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:1px;background:var(--rule);border:1px solid var(--rule);border-radius:6px;overflow:hidden}
+.kv div{background:var(--surface);padding:12px 14px;display:flex;flex-direction:column;gap:4px}
+.kv dt{font-size:.72rem;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin:0}
+.kv dd{margin:0;font:500 1.12rem "IBM Plex Mono",monospace}
+.kv dd small{font-size:.74rem;color:var(--muted);font-weight:400}
+.findings{display:flex;flex-direction:column;gap:10px;margin:0;padding-left:1.15em}
+.findings li{max-width:74ch}
+.grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,420px),1fr));gap:18px}
+.photos{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,210px),1fr));gap:14px}
+.photos figure img{aspect-ratio:352/288;object-fit:cover}
+.note{border-left:3px solid var(--accent);background:var(--accent-soft);padding:14px 16px;border-radius:0 6px 6px 0;display:flex;flex-direction:column;gap:8px}
+.note p{max-width:none}
+details{border:1px solid var(--rule);border-radius:6px;background:var(--surface)}
+summary{cursor:pointer;padding:12px 16px;font-weight:600}
+summary:focus-visible,a:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+details[open] summary{border-bottom:1px solid var(--rule)}
+details .inner{padding:16px;display:flex;flex-direction:column;gap:12px}
+ul.plain{margin:0;padding-left:1.15em;display:flex;flex-direction:column;gap:8px}
+a{color:var(--accent)}
+footer{color:var(--muted);font-size:.84rem;border-top:1px solid var(--rule);padding-top:18px;display:flex;flex-direction:column;gap:6px}
+@media (max-width:560px){h1{font-size:1.8rem}.station{padding:16px}}
+</style>
+
+<div class="wrap">
+
+<header>
+  <span class="eyebrow">NaturaSpec Plus SN25494G1 · FLENS8 8° · 17 Aug 2026</span>
+  <h1>Selawik and Hotham Inlet: above-water R<sub>rs</sub></h1>
+  <p class="lede">This is the 17 Aug 2026 field day run through the full fieldrrs pipeline:
+  71 scans at five stations, choppy water, and an overcast afternoon. LOC2 and LOC3 are
+  processed through the GIOP inversion and written up. Both are humic water
+  dominated by CDOM, with a<sub>dg</sub>(443) of 2.7–4.0 m⁻¹, 3–12 times the
+  16 Aug Kotzebue stations.</p>
+  <div class="meta">
+    <span><b>5</b> stations</span>
+    <span><b>71</b> scans · <b>36</b> water in final products</span>
+    <span>sun <b>26–36°</b> elevation</span>
+    <span>glint: <b>NIR similarity</b> (Ruddick et al. 2006)</span>
+    <span>ρ: Mobley 1999, angle-matched</span>
+  </div>
+</header>
+
+<section>
+  <div class="sec-head">
+    <h2>Stations</h2>
+    <p class="sub">Numbered in time order. Shape is the core-band (450–700 nm) consistency
+    of the amplitude-normalised mean, i.e. how well the spectral shape is known. Amplitude
+    is real scan-to-scan variability in brightness.</p>
+  </div>
+  <div class="tablewrap">
+  <table>
+    <thead><tr>
+      <th>Station</th><th>Where</th><th class="num">UTC</th><th class="num">water n</th>
+      <th class="num">shape</th><th class="num">ampl.</th>
+      <th class="num">R<sub>rs</sub>443</th><th class="num">R<sub>rs</sub>555</th><th class="num">R<sub>rs</sub>665</th><th class="num">R<sub>rs</sub>865</th><th>Status</th>
+    </tr></thead>
+    <tbody>
+      <tr><td><span class="chip"><i style="background:var(--c1)"></i>LOC1</span></td><td>Selawik R., drifting 308 m</td><td class="num">21:09</td><td class="num">6</td><td class="num">4.8 %</td><td class="num">13.1 %</td><td class="num">0.00182</td><td class="num">0.00301</td><td class="num">0.00258</td><td class="num">0.00031</td><td><span class="pill warn">usable, caveated</span></td></tr>
+      <tr><td><span class="chip"><i style="background:var(--c2)"></i>LOC2</span></td><td>Selawik village</td><td class="num">21:41</td><td class="num">7</td><td class="num">3.9 %</td><td class="num">14.1 %</td><td class="num">0.00084</td><td class="num">0.00264</td><td class="num">0.00395</td><td class="num">0.00070</td><td><span class="pill ok">fully processed</span></td></tr>
+      <tr><td><span class="chip"><i style="background:var(--c3)"></i>LOC3</span></td><td>Selawik Lake, west</td><td class="num">22:16</td><td class="num">16</td><td class="num">6.8 %</td><td class="num">24.3 %</td><td class="num">0.00155</td><td class="num">0.00325</td><td class="num">0.00387</td><td class="num">0.00069</td><td><span class="pill ok">fully processed</span></td></tr>
+      <tr><td><span class="chip"><i style="background:var(--c4)"></i>LOC4</span></td><td>Hotham Inlet</td><td class="num">01:21</td><td class="num">4</td><td class="num">1.6 %</td><td class="num">8.6 %</td><td class="num">0.00969</td><td class="num">0.02431</td><td class="num">0.02316</td><td class="num">0.00486</td><td><span class="pill bad">tilt assumed 40°</span></td></tr>
+      <tr><td><span class="chip"><i style="background:var(--c5)"></i>LOC5</span></td><td>Hotham Inlet</td><td class="num">02:16</td><td class="num">3</td><td class="num">2.3 %</td><td class="num">17.9 %</td><td class="num">0.00408</td><td class="num">0.00598</td><td class="num">0.00302</td><td class="num">0.00035</td><td><span class="pill warn">n = 3</span></td></tr>
+      <tr><td class="ref"><span class="chip"><i style="background:var(--cref)"></i>16 Aug LOC1</span></td><td class="ref">Kotzebue, reference</td><td class="num ref">—</td><td class="num ref">12</td><td class="num ref">1.9 %</td><td class="num ref">12.6 %</td><td class="num ref">0.00247</td><td class="num ref">0.00863</td><td class="num ref">0.00543</td><td class="num ref">0.00071</td><td class="ref">previous day</td></tr>
+    </tbody>
+  </table>
+  </div>
+  <p class="sub mono" style="font-size:.78rem">R<sub>rs</sub> in sr⁻¹, glint-corrected final product (<code>FINAL_Rrs.csv</code>). The UTC times for LOC4 and LOC5 fall on 18 Aug UTC (evening of 17 Aug local).</p>
+
+  <figure>
+    <img src="img/map.jpg" alt="Satellite basemap of Selawik Lake and Hotham Inlet with five station markers">
+    <figcaption><b>Where.</b> LOC1–3 lie along the Selawik River and Selawik Lake (brown, humic water).
+    LOC4–5 are in Hotham Inlet toward Kotzebue Sound, 45–83 km west.</figcaption>
+  </figure>
+
+  <figure>
+    <img src="img/overlay.jpg" alt="Overlay of final R_rs spectra for all five stations and the 16 Aug reference">
+    <figcaption><b>Three water types in one day.</b> LOC2 and LOC3 (humic) have depressed blue and
+    a red maximum at 650–690 nm. LOC5 (Hotham Inlet) has a green peak at 565 nm, similar to
+    Kotzebue on 16 Aug. LOC4 is 4× LOC5 and 8–9× LOC2/LOC3 at 555 nm, with a strong 810 nm feature, i.e. very
+    high sediment; its absolute level rests on an assumed view angle.</figcaption>
+  </figure>
+</section>
+
+<section>
+  <div class="sec-head">
+    <span class="eyebrow">Fully processed</span>
+    <h2>LOC2 and LOC3: the Selawik stations</h2>
+  </div>
+
+  <article class="station">
+    <div class="station-head">
+      <h3><span class="chip"><i style="background:var(--c2)"></i>LOC2 · Selawik village</span></h3>
+      <span class="coords">66.60173 N 160.00094 W · 21:41–21:47 UTC · calm, at the dock</span>
+    </div>
+    <dl class="kv">
+      <div><dt>a<sub>dg</sub>(443)</dt><dd>2.66 <small>m⁻¹ · ±36 % per scan</small></dd></div>
+      <div><dt>S<sub>dg</sub> fitted</dt><dd>0.0084 <small>nm⁻¹</small></dd></div>
+      <div><dt>b<sub>bp</sub>(443)</dt><dd>0.046 <small>m⁻¹ · shape unconstrained</small></dd></div>
+      <div><dt>best fit RMS</dt><dd>13.1 % <small>free S<sub>dg</sub>, η</small></dd></div>
+    </dl>
+    <ul class="findings">
+      <li><b>The standard GIOP-DC configuration fails.</b> With S<sub>dg</sub> fixed at 0.018 the fit reaches χ²<sub>ν</sub> = 47
+        (RMS 30 %) and drives M<sub>φ</sub> to zero: it puts all absorption into CDOM and still misses.</li>
+      <li><b>The fit needs a much flatter CDOM slope</b>: 0.0084 nm⁻¹, against the usual 0.014–0.020. The free and max-freedom fits agree
+        on a<sub>dg</sub>(443) to 0.4 %. Quote about 2.7 m⁻¹ with a factor-1.5 uncertainty, 3.4–8× the 16 Aug Kotzebue stations.</li>
+      <li><b>Chlorophyll is present but not measurable.</b> A dip near 670 nm between maxima at 650 and 690 nm is
+        chlorophyll-a red absorption. M<sub>φ</sub> runs from 0 to 0.68 across configurations and the seed has no self-consistent fixed point.</li>
+      <li><b>The fit is still poor.</b> The best fit misses by 13 % RMS and η sits on its −1 bound, so the composition is model-dependent.</li>
+    </ul>
+    <div class="grid2">
+      <figure><img src="img/loc2_fig12.jpg" alt="LOC2 final mean R_rs with shape and amplitude bands"><figcaption><b>Final R<sub>rs</sub></b>, 7 scans. Shape known to 3.9 %. The arrow labels are fixed template annotations, not interpretations of this water.</figcaption></figure>
+      <figure><img src="img/loc2_fig14.jpg" alt="LOC2 every individual water scan"><figcaption><b>Every scan.</b> 00013–18 are tight. 00033 (58° view, near the bank) is about 25 % brighter with the same shape.</figcaption></figure>
+    </div>
+    <figure><img src="img/loc2_giop10.jpg" alt="LOC2 GIOP final result panel"><figcaption><b>GIOP result.</b> Constrained (red) vs free (green) per scan and for the mean spectrum. The green "maximum freedom" text box contains hard-coded 16 Aug numbers (74 → 18); ignore it.</figcaption></figure>
+  </article>
+
+  <article class="station">
+    <div class="station-head">
+      <h3><span class="chip"><i style="background:var(--c3)"></i>LOC3 · Selawik Lake, west</span></h3>
+      <span class="coords">66.60463 N 160.33681 W · 22:16–22:22 UTC · open-lake chop</span>
+    </div>
+    <dl class="kv">
+      <div><dt>a<sub>dg</sub>(443)</dt><dd>3.3–4.0 <small>m⁻¹ · ±55 % per scan</small></dd></div>
+      <div><dt>S<sub>dg</sub> fitted</dt><dd>0.0076–0.0078 <small>nm⁻¹</small></dd></div>
+      <div><dt>b<sub>bp</sub>(443)</dt><dd>0.11–0.14 <small>m⁻¹ · ≈2.5× LOC2</small></dd></div>
+      <div><dt>best fit RMS</dt><dd>2.2–3.9 % <small>max-free / free</small></dd></div>
+    </dl>
+    <ul class="findings">
+      <li><b>Same CDOM regime as LOC2, 15 km away.</b> The fitted slope (0.0076–0.0078) matches LOC2, so the flat slope belongs to this
+        water, or to how the model handles it, rather than to one bad fit.</li>
+      <li><b>More particles.</b> b<sub>bp</sub>(443) is about 2.5× LOC2, which fits the brighter 550–700 nm signal and the
+        wind-mixed open lake. This fit is good (2–4 % RMS).</li>
+      <li><b>The blue end is where the uncertainty lives.</b> Per-scan R<sub>rs</sub>(400) varies 6×, while 550–700 nm stays consistent.
+        Blue is where ρ·L<sub>sky</sub> error dominates, and a<sub>dg</sub> is set there, so it carries about ±50 % per scan.</li>
+      <li><b>Do not quote chlorophyll</b> (M<sub>φ</sub> 3–8; fixed point at chl 47.8 against OC4's 7.2). Depth was not
+        measured, so a bottom contribution can't be excluded, although no photo shows the bottom.</li>
+    </ul>
+    <div class="grid2">
+      <figure><img src="img/loc3_fig12.jpg" alt="LOC3 final mean R_rs with shape and amplitude bands"><figcaption><b>Final R<sub>rs</sub></b>, 16 scans. Shape known to 6.8 %; note the widening band below 450 nm.</figcaption></figure>
+      <figure><img src="img/loc3_fig14.jpg" alt="LOC3 every individual water scan"><figcaption><b>Every scan.</b> 00049–57 sit higher than 00035–41. 00038 and 00052 were glint-affected and corrected.</figcaption></figure>
+    </div>
+    <figure><img src="img/loc3_giop10.jpg" alt="LOC3 GIOP final result panel"><figcaption><b>GIOP result.</b> Freeing S<sub>dg</sub> takes the RMS from 35 % to 3.9 %. The same stale text box caveat applies.</figcaption></figure>
+  </article>
+</section>
+
+<section>
+  <div class="sec-head">
+    <span class="eyebrow">Requested checks</span>
+    <h2>LOC5 glint correction and LOC4 assumed tilt</h2>
+  </div>
+  <div class="grid2">
+    <div class="station">
+      <h3><span class="chip"><i style="background:var(--c5)"></i>LOC5: glint correction kept</span></h3>
+      <p>NIR similarity removes a <b>flat −0.0027 sr⁻¹</b> (spectral SD 6×10⁻⁵, flat to about 2 %), which is the signature of an additive surface term.
+      R<sub>rs</sub>(555) goes from 0.0086 to 0.0060 (−30 %) and the NIR collapses to about 0.0004.</p>
+      <p><b>Why it is right:</b> scan-to-scan amplitude scatter halves (33.6 % → 17.9 %) and shape improves slightly (2.7 → 2.3 %).
+      Glint varied between scans, and removing it pulls the scans together.</p>
+    </div>
+    <div class="station">
+      <h3><span class="chip"><i style="background:var(--c4)"></i>LOC4: processed with tilt = 40°</span></h3>
+      <p>The tilt sensor logged nothing, so derived copies in <code>FLENS8_FOV08_ASSUMED_TILT40/</code> carry the protocol view angle.
+      The raw files are untouched. The 4 water scans agree to 1.6 % in shape.</p>
+      <p><b>Caveat:</b> glint correction removed −0.014 sr⁻¹, 5× LOC5's offset. That points to ρ·L<sub>sky</sub> being under-subtracted
+      (an arm is in the sky photos, and the angle is assumed). The shape is usable; treat the absolute level as tentative.</p>
+    </div>
+  </div>
+  <figure><img src="img/loc5_glint.jpg" alt="LOC5 R_rs with and without NIR-similarity glint correction"><figcaption><b>LOC5 before and after.</b> Left: uncorrected (blue) vs corrected (orange). Right: the difference, nearly flat across 400–900 nm.</figcaption></figure>
+</section>
+
+<section>
+  <div class="sec-head">
+    <span class="eyebrow">R<sub>rs</sub> only, GIOP not triaged</span>
+    <h2>LOC1, LOC4 and LOC5</h2>
+    <p class="sub">Final spectrum (left) and every individual water scan (right) for each station.</p>
+  </div>
+
+  <article class="station">
+    <div class="station-head">
+      <h3><span class="chip"><i style="background:var(--c1)"></i>LOC1 · Selawik River, drifting</span></h3>
+      <span class="coords">66.52827 N 159.85315 W · 21:09–21:16 UTC · drifted 308 m</span>
+    </div>
+    <div class="grid2">
+      <figure><img src="img/loc1_fig12.jpg" alt="LOC1 final mean R_rs"><figcaption><b>Final R<sub>rs</sub></b>, 6 scans: maximum at 583 nm, shape 4.8 %.</figcaption></figure>
+      <figure><img src="img/loc1_fig14.jpg" alt="LOC1 every individual water scan"><figcaption><b>Every scan.</b> 00012 (bad white reference) is excluded and off-scale. 00004 dips negative in the 720/760/820 nm atmospheric bands, a sky/panel mismatch; it is the noisiest of the six.</figcaption></figure>
+    </div>
+  </article>
+
+  <article class="station">
+    <div class="station-head">
+      <h3><span class="chip"><i style="background:var(--c4)"></i>LOC4 · Hotham Inlet, tilt assumed 40°</span></h3>
+      <span class="coords">66.50898 N 161.32982 W · 01:21–01:24 UTC · hand-held</span>
+    </div>
+    <div class="grid2">
+      <figure><img src="img/loc4_fig12.jpg" alt="LOC4 final mean R_rs"><figcaption><b>Final R<sub>rs</sub></b>, 4 scans: R<sub>rs</sub>(555) = 0.024 sr⁻¹, shape 1.6 %.</figcaption></figure>
+      <figure><img src="img/loc4_fig14.jpg" alt="LOC4 every individual water scan"><figcaption><b>Every scan.</b> The 4 scans are parallel. The flat 580–700 nm plateau and the 810 nm peak point to very high sediment. 00059 is about 15 % brighter. The absolute level depends on the assumed angle.</figcaption></figure>
+    </div>
+  </article>
+
+  <article class="station">
+    <div class="station-head">
+      <h3><span class="chip"><i style="background:var(--c5)"></i>LOC5 · Hotham Inlet</span></h3>
+      <span class="coords">66.56031 N 161.71074 W · 02:16–02:18 UTC · sunlit chop</span>
+    </div>
+    <div class="grid2">
+      <figure><img src="img/loc5_fig12.jpg" alt="LOC5 final mean R_rs"><figcaption><b>Final R<sub>rs</sub></b>, 3 scans, glint-corrected: green peak at 565 nm, shape 2.3 %.</figcaption></figure>
+      <figure><img src="img/loc5_fig14.jpg" alt="LOC5 every individual water scan"><figcaption><b>Every scan.</b> All three share one shape. 00067 is the dimmest (the 17.9 % amplitude spread). 00065 shows the same atmospheric-band dips as LOC1 00004.</figcaption></figure>
+    </div>
+  </article>
+</section>
+
+<section>
+  <div class="sec-head">
+    <h2>What the camera saw</h2>
+    <p class="sub">These photos settled several classification calls. Each is the instrument's own frame; the red dot marks the 8° field of view.</p>
+  </div>
+  <div class="photos">
+    <figure><img src="img/photo_00001.jpg" alt="Overcast grey sky"><figcaption><b>00001</b> overcast sky: grey cloud, no Rayleigh blue. The classifier first called these "land".</figcaption></figure>
+    <figure><img src="img/photo_00007.jpg" alt="Choppy water with whitecaps"><figcaption><b>00007</b> LOC1 chop with whitecaps</figcaption></figure>
+    <figure><img src="img/photo_00016.jpg" alt="Calm brown water beside the dock"><figcaption><b>00016</b> LOC2 calm humic water at the dock</figcaption></figure>
+    <figure><img src="img/photo_00028.jpg" alt="Water mirroring a willow bank"><figcaption><b>00028</b> water mirroring a willow bank: excluded as land</figcaption></figure>
+    <figure><img src="img/photo_00052.jpg" alt="Open lake with whitecaps"><figcaption><b>00052</b> LOC3 open-lake chop, glint-corrected</figcaption></figure>
+    <figure><img src="img/photo_00059.jpg" alt="Hand-held view of turbid water from the boat"><figcaption><b>00059</b> LOC4 hand-held, turbid; tilt not recorded</figcaption></figure>
+    <figure><img src="img/photo_00066.jpg" alt="Sunlit choppy water"><figcaption><b>00066</b> LOC5 sunlit chop</figcaption></figure>
+    <figure><img src="img/photo_00069.jpg" alt="Partly cloudy blue sky"><figcaption><b>00069</b> LOC5 partly cloudy sky</figcaption></figure>
+  </div>
+</section>
+
+<section>
+  <h2>Caveats and open items</h2>
+  <div class="note">
+    <p><b>Fine structure at about 527 and 589 nm</b> appears at several stations. It lines up with the Fe E and Na D solar
+    Fraunhofer lines, which suggests slight wavelength misregistration between the sky and water scans. Not verified; don't read these as water features.</p>
+  </div>
+  <details>
+    <summary>Pipeline fixes made to process this day</summary>
+    <div class="inner">
+      <ul class="plain">
+        <li><b>Overcast sky</b> was classified "land". <code>classify()</code> now accepts grey sky: no red edge, blue/green &gt; 1, L<sub>t</sub>/L<sub>ref</sub> &gt; 0.3. All 60 16 Aug classifications are unchanged; 2 new tests fail when either half of the rule is removed.</li>
+        <li><b>Reflectance in percent</b>: DARWin wrote <code>Reflect. %</code> for the evening scans, and <code>verify_field_calcs</code> read the raw column (a 99 % mismatch). Now 0.05–0.16 %.</li>
+        <li><b>Drifting stations</b>: added <code>--tol-m</code> (clustering) and <code>--max-span-m</code> (analysis); defaults unchanged, and the report records any override.</li>
+        <li><b>Station numbering</b> wrapped at midnight UTC; now by scan counter. The <b>map</b> now picks its own zoom and handles more than 3 stations (it had hit 14 GB of RAM).</li>
+        <li>Crash guards: blank tilt in the survey, a pinned parameter in the GIOP histogram, and the angle/footprint figure with no range or a single tilt.</li>
+      </ul>
+    </div>
+  </details>
+  <details>
+    <summary>Exclusions</summary>
+    <div class="inner">
+      <ul class="plain">
+        <li><b>00012 (LOC1)</b>: white reference taken on a dark target (L<sub>ref</sub> = 0.005), giving R<sub>rs</sub>(555) = 0.21.</li>
+        <li><b>00019, 00020 (LOC2)</b>: water in the photos, but on the land/water threshold; left excluded.</li>
+        <li><b>00027–32, 00034 (LOC2)</b>: bank reflections and oblique shoreline views, classified land.</li>
+      </ul>
+    </div>
+  </details>
+  <details>
+    <summary>Not done</summary>
+    <div class="inner">
+      <ul class="plain">
+        <li>Slide deck: done, <code>SELAWIK_20260817_RESULTS.pptx</code> (11 slides).</li>
+        <li>GIOP findings write-ups for LOC1, LOC4 and LOC5.</li>
+        <li>The stale text boxes in <code>giop10</code> and the fixed annotations in <code>fig12</code> have not been fixed.</li>
+      </ul>
+    </div>
+  </details>
+</section>
+
+<footer>
+  <span>Source: <span class="mono">kotzebue_ocean_color/fieldrrs/Data_NatureSpec/2026_Aug_17/</span>. Decisions in <span class="mono">PROCESSING_NOTES.md</span>; station verdicts in <span class="mono">LOC2_GIOP_FINDINGS.md</span>, <span class="mono">LOC3_GIOP_FINDINGS.md</span>.</span>
+  <span>Generated 1 Oct 2026 from the pipeline outputs; every number on this page comes from those runs.</span>
+</footer>
+
+</div>
