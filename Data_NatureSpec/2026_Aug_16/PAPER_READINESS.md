@@ -98,7 +98,34 @@ LOC1/LOC2.** The murky pair's b_bp elevation (§1b-style corroboration, `LOC3_GI
 §A1) is the one LOC3 GIOP finding least affected by this, since it is corroborated by two
 methods that do not depend on optical-depth assumptions at all.
 
-### 2d0. LOC1 had the same glint defect LOC2a had — found this session, now fixed (2026-08-18)
+### 2d0. LOC1 NIR residual correction (applied 2026-08-18; justification revised 2026-10-02)
+
+> **2026-10-02 revision.** The step-5 verdict below was an artefact. `analyse_water_scans.py`
+> paired each water scan with the nearest-angle sky across BOTH LOC1 panel blocks, while
+> FINAL never crosses a block; 6 of 12 scans used a different sky. With the pairing fixed,
+> all 12 LOC1 scans are `clean` (00005 and 00007 sit at 3.00° and 3.13° median angle to
+> the seed group against a 3.15° cut, so the original call was marginal too). There is no
+> scan-level glint evidence at LOC1.
+>
+> **The correction is kept, on empirical grounds only:** it is a per-scan flat NIR offset
+> (Ruddick et al. 2006 similarity) and it tightens the between-scan shape where the
+> uncorrected scans disagree most. Re-run 2026-10-02 from the scans, per-wavelength
+> shape_sd/R_rs averaged over each range, none → nir_similarity:
+>
+> | range | none | nir_similarity |
+> |---|---|---|
+> | 400–450 nm | 7.80 % | 6.72 % |
+> | 450–700 nm | 1.75 % | 1.92 % |
+> | 700–900 nm | 13.51 % | 5.10 % |
+> | `shape_cv_pct` (400–900 nm) | 7.08 % | 3.68 % |
+>
+> The gain is in the NIR (where a flat offset dominates the small signal) and the blue;
+> the 450–700 nm core, which REPORT.txt calls "the product", is marginally worse (SHAPE
+> 1.7 % → 1.9 %). R_rs moves ≤0.3 % at 443/555/665/865 nm. So this is a choice to
+> trust a flat-offset model of the residual surface term at every scan, not a
+> correction of identified glint; quote it that way. The original 2026-08-18 text
+> follows unchanged.
+
 `analyse_water_scans.py` had never been run at LOC1 (it postdates LOC1's original
 processing); running it retroactively found 00005 and 00007 (2 of 12 water scans) verdict
 `glint (correctable)`, the same test that flagged LOC2a's scan 00035. This was left open
@@ -146,7 +173,10 @@ dataset does.
 ## 3. Open items, ranked by value per unit of future field effort
 
 ~~0. Decide on LOC1's 00005/00007 glint correction~~ — **RESOLVED 2026-08-18**, applied
-   (§2d0). Kept as a struck-through entry rather than deleted, since the reasoning for why
+   (§2d0). **Revisited 2026-10-02**: the glint verdict that prompted it disappeared once
+   step 5 used FINAL's sky pairing; the correction is kept as an empirically motivated
+   NIR-residual correction (shape scatter 7.08 % → 3.68 % over 400–900 nm, gain in the
+   NIR/blue, core 450–700 nm slightly worse), see the revision note at the top of §2d0. Kept as a struck-through entry rather than deleted, since the reasoning for why
    it was held open (a re-processing decision that moves the reference station's headline
    numbers deserves an explicit call, not a silent inheritance from precedent) is itself
    worth keeping visible for the next time a similar defect turns up somewhere else.

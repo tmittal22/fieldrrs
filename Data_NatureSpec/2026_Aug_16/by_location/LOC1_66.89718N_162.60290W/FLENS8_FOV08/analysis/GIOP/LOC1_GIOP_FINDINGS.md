@@ -11,7 +11,8 @@ definitions in `THEORY_GIOP_NOTE.md`; how to reproduce in `FIELD_DAY_WORKFLOW.md
 > only, not for quoting.
 >
 > **⚠ 2026-08-18: `FINAL_Rrs.csv` was regenerated** with `--glint nir_similarity`
-> (00005/00007 corrected — `PAPER_READINESS.md` §2d0). §A1's table and the "1.93%"
+> (kept 2026-10-02 as an empirical NIR-residual correction; the original 00005/00007
+> glint verdict was a sky-pairing artefact — `PAPER_READINESS.md` §2d0). §A1's table and the "1.93%"
 > uncertainty figure throughout this file are updated to the corrected run, freshly
 > re-verified from `giop_FINAL.csv`. Everything else in §A2–§A5 (S_dg routes, per-scan
 > gain, the χ² map) was NOT individually re-run against the correction — a_dg/b_bp moved

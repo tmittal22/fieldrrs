@@ -6,7 +6,8 @@ FIBR15-main, LOC3 FIBR15-murky, LOC3 FLENS8) plus one non-water reflectance prod
 `by_location/COMPARISON/giop_cross_station_all.png` (GIOP composition).
 
 ⚠ **2026-08-18: LOC1's `FINAL_Rrs.csv` was regenerated** with `--glint nir_similarity`
-(00005/00007 corrected, `PAPER_READINESS.md` §2d0) — every LOC1-derived number below
+(kept 2026-10-02 as an empirical NIR-residual correction, not a glint fix: the 00005/00007
+glint verdict was a sky-pairing artefact; `PAPER_READINESS.md` §2d0) — every LOC1-derived number below
 reflects the corrected product. a_dg/b_bp are unchanged to the precision quoted; RMS
 misfit and χ²_ν moved slightly (see §3).
 

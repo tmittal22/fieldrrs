@@ -124,9 +124,10 @@ it back into the group, or is it genuinely different water?), a contact sheet of
 photos, and a verdict table (`clean` / `glint (correctable)` / `deviant, NOT glint`).
 
 **Run this at every station, not just ones you already suspect are mixed** — it is what
-caught LOC2's disturbed-water sub-population (§below) and LOC1's own two
-glint-affected scans (00005, 00007, both `glint (correctable)`, found only when this
-tool was finally run there — see the LOC1 row of the status table). Needs ≥3 water
+caught LOC2's disturbed-water sub-population (§below). At LOC1 it first flagged 00005
+and 00007 as `glint (correctable)`, but only because it paired skies across panel blocks;
+with the block-respecting pairing FINAL uses (2026-10-02) all 12 LOC1 scans are `clean`
+— see the LOC1 row of the status table. Needs ≥3 water
 scans; below that (LOC3's murky pair, n=2) it writes an explanation to
 `water_scans/REPORT.txt` instead of silently producing nothing, since clustering needs
 something to cluster against.
@@ -336,9 +337,9 @@ record is `Data_NatureSpec/2026_Aug_17/PROCESSING_NOTES.md`; the reusable parts:
   00020, R_rs(555) down 6-9e-5 sr⁻¹). **LOC1's verdicts DID change**, contrary to what this
   bullet said before: 00005 and 00007 went from `glint (correctable)` to `clean`, leaving no
   deviants. Both are marginal (median angle to seed 3.00° and 3.13° vs a 3.15° cut; before:
-  3.20° and 3.09° vs 3.02°). The 2026-08-18 decision to apply `--glint nir_similarity` at
-  LOC1 (`PAPER_READINESS.md` §2d0, the "LOC1's own two glint-affected scans" line in step 5
-  above) rested on that verdict and is open again; FINAL is unchanged. CORRECTIONS.md
+  3.20° and 3.09° vs 3.02°). LOC1's `--glint nir_similarity` (2026-08-18) was justified
+  by that verdict; it is KEPT, now on empirical grounds only (shape scatter, see the LOC1
+  status row and `PAPER_READINESS.md` §2d0), and FINAL is unchanged. CORRECTIONS.md
   regenerated for all 11 R_rs stations; its sky / R_rs555-before / verdict columns match
   `water_scans/REPORT.txt` for all 70 scans.
 - **Step 9 is now per day**: `make_highlights.py` takes a `DAYS` entry and
@@ -349,7 +350,7 @@ record is `Data_NatureSpec/2026_Aug_17/PROCESSING_NOTES.md`; the reusable parts:
 
 | location | scans | foreoptic | steps 0–6 | GIOP | notes |
 |---|---|---|---|---|---|
-| **LOC1** 66.89718 N 162.60290 W | 22 (12 water) | FLENS8 (8°) | **done** | **done** | one population; `--glint nir_similarity` applied 2026-08-18 (00005/00007 were glint-correctable, same test/fix as LOC2a's 00035) — shape consistency 7.08%→3.68%, R_rs(555) 0.00865→0.00863 (−0.23%), GIOP composition unchanged; see `Data_NatureSpec/2026_Aug_16/PAPER_READINESS.md` §2d0 |
+| **LOC1** 66.89718 N 162.60290 W | 22 (12 water) | FLENS8 (8°) | **done** | **done** | one population; `--glint nir_similarity` applied 2026-08-18 and kept. Originally justified by step 5 calling 00005/00007 glint-correctable; with the 2026-10-02 pairing fix every scan is `clean`, so the correction now rests on its empirical effect on shape: `shape_cv_pct` (400–900 nm) 7.08%→3.68%, driven by 700–900 nm (13.5%→5.1%) and 400–450 nm (7.8%→6.7%); the 450–700 nm core goes 1.75%→1.92% (slightly worse). R_rs(555) 0.00865→0.00863 (−0.23%), GIOP composition unchanged; see `Data_NatureSpec/2026_Aug_16/PAPER_READINESS.md` §2d0 |
 | **LOC2a** (main) 66.89677 N 162.57953 W | 9 water | FLENS8 (8°) | **done** | **done** | 00035 glint-corrected via `--glint nir_similarity`, verified to collapse back into the group |
 | **LOC2b** (disturbed) | 3 water | FLENS8 (8°) | **done** | **done** | real, not artefact, n=3 — report with the weaker-n caveat |
 | **LOC2c** (algae mat) | 2 | FLENS8 (8°) | **n/a — reflectance, not R_rs** | n/a | one figure + REPORT.txt by design (`analyse_algae_mat.py`); not the 13-figure R_rs pipeline, see its own module docstring for why |
