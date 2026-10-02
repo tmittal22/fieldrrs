@@ -55,6 +55,7 @@ import numpy as np
 
 from fieldrrs.rrs import (SIMILARITY_780_870, rho_at_angle, rrs_three_scan,
                           view_zenith_from_tilt)
+from analyse_location import match_by_angle
 from organize_by_location import survey
 
 LO, HI = 400.0, 900.0
@@ -68,12 +69,16 @@ def _ix(wl, x):
 
 
 def build_rrs(water, sky, wl, panel_r, method="none"):
-    """R_rs per water scan, each paired to the sky closest in view geometry."""
+    """R_rs per water scan, paired to its sky exactly as FINAL_Rrs.csv pairs it.
+
+    `match_by_angle(respect_blocks=True)`: nearest angle within the water scan's own
+    panel-reference block. Nearest angle across the whole location picked a different
+    sky for 6 of 12 scans at 2026-08-16 LOC1, so the QC table did not describe FINAL.
+    """
     out = {}
-    for w in water:
+    for w, sk, _, _ in match_by_angle(water, sky, respect_blocks=True):
         tv = view_zenith_from_tilt(w["spec"].tilt_y_deg)
         rho = rho_at_angle(tv)
-        sk = min(sky, key=lambda k: abs(view_zenith_from_tilt(k["spec"].tilt_y_deg) - tv))
         r = rrs_three_scan(wl, w["spec"].columns["rad_target"],
                            sk["spec"].columns["rad_target"],
                            w["spec"].columns["rad_ref"], panel_r, rho, method)
@@ -312,7 +317,7 @@ def main():
     os.makedirs(outdir, exist_ok=True)
 
     wl = np.array(scans[0]["spec"].wavelength)
-    sky = [x for x in scans if x["role"] == "sky"]
+    sky = sorted([x for x in scans if x["role"] == "sky"], key=lambda x: x["n"])
     water = sorted([x for x in scans if x["role"] == "water"], key=lambda x: x["n"])
     names = [w["n"] for w in water]
     if len(water) < 3 or not sky:

@@ -281,6 +281,37 @@ class TestRetrievedRrs(unittest.TestCase):
                             % (st["ref"], 100 * spread))
 
 
+class TestWaterScanQcUsesFinalSkyPairing(unittest.TestCase):
+    """`analyse_water_scans.py` (step-5 QC) must pair each water scan with the SAME sky
+    scan as `analyse_location.py` (FINAL_Rrs.csv), which never crosses a panel-reference
+    block. LOC1 is the discriminating station: it has two panel blocks, and nearest-angle
+    matching across the whole location picks sky 00000/00002 (other block) for 6 of its
+    12 water scans where FINAL uses 00020, shifting R_rs(555) by up to ~1 %."""
+
+    LOC1 = REAL_BACKING_STORES[0]
+
+    def test_pairing_and_rrs_match_final(self):
+        import numpy as np
+        from analyse_location import match_by_angle
+        from analyse_water_scans import build_rrs
+        from fieldrrs.rrs import rho_at_angle, rrs_three_scan, view_zenith_from_tilt
+        from organize_by_location import survey
+        scans = survey(self.LOC1)
+        wl = np.array(scans[0]["spec"].wavelength)
+        sky = sorted([s for s in scans if s["role"] == "sky"], key=lambda s: s["n"])
+        water = sorted([s for s in scans if s["role"] == "water"], key=lambda s: s["n"])
+        self.assertEqual(len(water), 12)
+        qc = build_rrs(water, sky, wl, 0.99, "none")
+        for w, sk, _, note in match_by_angle(water, sky, respect_blocks=True):
+            self.assertEqual(note, "")
+            self.assertEqual(qc[w["n"]]["sky"], sk["n"], w["n"])
+            rho = rho_at_angle(view_zenith_from_tilt(w["spec"].tilt_y_deg))
+            ref = rrs_three_scan(wl, w["spec"].columns["rad_target"],
+                                 sk["spec"].columns["rad_target"],
+                                 w["spec"].columns["rad_ref"], 0.99, rho, "none").rrs
+            np.testing.assert_array_equal(qc[w["n"]]["rrs"], np.array(ref))
+
+
 DATA_0817 = os.path.join(ROOT, "Data_NatureSpec", "2026_Aug_17")
 
 

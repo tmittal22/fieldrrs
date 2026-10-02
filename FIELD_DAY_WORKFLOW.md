@@ -327,10 +327,20 @@ record is `Data_NatureSpec/2026_Aug_17/PROCESSING_NOTES.md`; the reusable parts:
   R_rs before and after, the step-5 verdict and whether the scan is in FINAL. Every
   number is recomputed or parsed from the run; hand-written judgement goes in an optional
   `STATION_NOTES.md`, included verbatim. Regenerate after any re-run.
-- **Known inconsistency**: `analyse_water_scans.py` pairs each water scan with the
-  nearest-angle sky across ALL panel blocks, while `analyse_location.py` (FINAL) never
-  crosses a block. Its diagnostic table can therefore use a different sky (2026-08-16
-  LOC1: 6 of 12 scans, up to ~1 % at 555 nm; no verdict changed). Not fixed.
+- **Sky pairing in step 5 now matches FINAL (fixed 2026-10-02)**: `analyse_water_scans.py`
+  used to pair each water scan with the nearest-angle sky across ALL panel blocks, while
+  `analyse_location.py` never crosses a block. `build_rrs` now calls
+  `match_by_angle(respect_blocks=True)`, guarded by
+  `tests/test_field_day.py::TestWaterScanQcUsesFinalSkyPairing`. Re-run on all 13 station
+  folders: only 2026-08-16 LOC1 changed (00005/00008/00011/00012/00017/00019 now use sky
+  00020, R_rs(555) down 6-9e-5 sr⁻¹). **LOC1's verdicts DID change**, contrary to what this
+  bullet said before: 00005 and 00007 went from `glint (correctable)` to `clean`, leaving no
+  deviants. Both are marginal (median angle to seed 3.00° and 3.13° vs a 3.15° cut; before:
+  3.20° and 3.09° vs 3.02°). The 2026-08-18 decision to apply `--glint nir_similarity` at
+  LOC1 (`PAPER_READINESS.md` §2d0, the "LOC1's own two glint-affected scans" line in step 5
+  above) rested on that verdict and is open again; FINAL is unchanged. CORRECTIONS.md
+  regenerated for all 11 R_rs stations; its sky / R_rs555-before / verdict columns match
+  `water_scans/REPORT.txt` for all 70 scans.
 - **Step 9 is now per day**: `make_highlights.py` takes a `DAYS` entry and
   `make_slide_deck.py` a `build_<day>()` registered in `BUILDERS`. The 08-16 output is
   unchanged (slide text and image placement diffed identical).
