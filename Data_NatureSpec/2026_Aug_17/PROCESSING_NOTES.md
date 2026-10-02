@@ -69,6 +69,11 @@ Results page: https://claude.ai/artifact/YDHohKb9ZNfPj35YoKVWSF
 - **Fine structure at ~527 / ~589 nm** at several stations lines up with the Fe E and
   Na D Fraunhofer lines, i.e. probably sky/water wavelength misregistration. Not verified.
 
+- **Per-station records**: each station folder has `CORRECTIONS.md` (generated, per
+  scan) and `STATION_NOTES.md` (hand-written decisions). The "before" R_rs(555) column
+  was cross-checked against step 5's independently computed table: all 37 Aug-17 water
+  scans agree exactly.
+
 ## Open
 
 - GIOP findings for LOC1, LOC4, LOC5 not written.

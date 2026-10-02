@@ -321,6 +321,16 @@ record is `Data_NatureSpec/2026_Aug_17/PROCESSING_NOTES.md`; the reusable parts:
 - **Compare stations on the core-band SHAPE** (REPORT.txt, 450-700 nm), not the
   `shape_cv_pct` in the FINAL_Rrs.csv header. That one averages 400-900 nm and blows up
   where glint-corrected R_rs approaches 0.
+- **Per-station correction record**: `python make_corrections_doc.py <station>` writes
+  `CORRECTIONS.md` next to the scans: run flags, the correction chain, and per scan
+  the paired sky, Δθ, ρ, the reflected-sky share of L_t at 443 nm, the glint offset ε,
+  R_rs before and after, the step-5 verdict and whether the scan is in FINAL. Every
+  number is recomputed or parsed from the run; hand-written judgement goes in an optional
+  `STATION_NOTES.md`, included verbatim. Regenerate after any re-run.
+- **Known inconsistency**: `analyse_water_scans.py` pairs each water scan with the
+  nearest-angle sky across ALL panel blocks, while `analyse_location.py` (FINAL) never
+  crosses a block. Its diagnostic table can therefore use a different sky (2026-08-16
+  LOC1: 6 of 12 scans, up to ~1 % at 555 nm; no verdict changed). Not fixed.
 - **Step 9 is now per day**: `make_highlights.py` takes a `DAYS` entry and
   `make_slide_deck.py` a `build_<day>()` registered in `BUILDERS`. The 08-16 output is
   unchanged (slide text and image placement diffed identical).
